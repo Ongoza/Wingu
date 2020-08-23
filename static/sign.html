@@ -1,0 +1,47 @@
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <link rel="icon" type="image/png" href="lib/favicon.png">
+        <!-- <script src="js/test.js"></script> -->
+        <link href="lib/bootstrap.min.css" rel="stylesheet">
+        <script src="lib/jquery-3.5.1.min.js"></script>
+        <script src="lib/bootstrap.min.js"></script>
+        <!-- <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"></script> -->
+        <title>"Login page"</title>
+        <script>
+            $(document).ready(function(){
+                // $('#login').click(function(){ window.location.href = "login" });
+                function showError(error){ $('#error').html(error)}
+                $('#submit').click(function(){
+                    var login = $('#login_text').val(), password = $('#password');
+                    console.log(login, password.val());
+                    if (login && password){
+                        $.post('/sign/0', {'login': login, 'password': password.val()}, function(data){
+                            console.log(data);
+                            if (data.error){showError(data.error)
+                            }else{
+                                console.log("redirect to root.")
+                                window.location.href = '/'}
+                            });
+                    }else{showError('Please fill all fields');}
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <div class="card mx-auto" style="width: 28rem;">
+            <div class="card-body">
+                <h1>Sign In</h1>
+                <div class="login-form">
+                    <form >
+                        <div class="form-group"><input type="text" class="form-control" id="login_text" placeholder="Login" required="required"></div>
+                        <div class="form-group"><input type="password" class="form-control" id="password" placeholder="Password" required="required"></div>
+                        <div class="form-group"><button class="btn btn-primary btn-block" id="submit">Sign in</button></div>
+                        <div class="clearfix"><label class="float-left form-check-label"><input type="checkbox"> Remember me</label></div>        
+                </form>
+            </div>
+        </div>
+    </body>    
+</html>
