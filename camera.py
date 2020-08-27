@@ -1,8 +1,39 @@
+import os, sys, traceback
 import time
-import threading
+import queue, threading
 import asyncio
 import logging
+import cv2
+import numpy as np
+import random
+import requests
+import json
 # from server import log
+
+class VideoCapture:
+    def __init__(self, name):
+        self.cap = cv2.VideoCapture(name)
+        self.q = queue.Queue()
+        self._stopevent = threading.Event()
+        t = threading.Thread(target=self._reader)
+        t.daemon = True
+        t.start()
+    # read frames as soon as they are available, keeping only most recent one
+    def _reader(self):
+        while not self._stopevent.isSet():
+            if(self.cap):
+                ret, frame = self.cap.read()
+                if (ret): 
+                    if (not self.q.empty()):
+                        try: self.q.get_nowait()   # discard previous (unprocessed) frame
+                        except queue.Empty: pass
+                    self.q.put(frame)
+    def read(self):
+        return self.q.get()
+    def exit(self):
+        self._stopevent.set()
+        if(self.cap):
+            if(self.cap.isOpened()):self.cap.release()
 
 class Camera(threading.Thread):
     def __init__(self, id, log):
