@@ -3,7 +3,7 @@ import time
 import queue, threading
 import asyncio
 import logging
-import cv2
+# import cv2
 import numpy as np
 import random
 import requests

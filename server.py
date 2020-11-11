@@ -2,7 +2,7 @@
 import asyncio
 # import aiohttp_debugtoolbar
 from aiohttp_session import session_middleware
-from aiohttp_session.cookie_storage import EncryptedCookieStorage
+# from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
 from aiohttp import web
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict
@@ -11,7 +11,7 @@ from pathlib import Path
 from routes import routes
 from middlewares import authorize
 # from motor import motor_asyncio as ma
-import asyncio
+# import asyncio
 import io
 import sqlite3
 
@@ -35,12 +35,14 @@ async def on_shutdown(app):
     for ws in app['websockets']:
         await ws.close(code=1001, message='Server shutdown')
 # print("SECRET_KEY", SECRET_KEY)
-middle = [
-    session_middleware(EncryptedCookieStorage(hashlib.sha256(bytes(settings.SECRET_KEY, 'utf-8')).digest())),
-    authorize,
-]
+#middle = [
+#    session_middleware(EncryptedCookieStorage(hashlib.sha256(bytes(settings.SECRET_KEY, 'utf-8')).digest())),
+#    authorize,
+#]
 
-app = web.Application(middlewares=middle)
+#app = web.Application(middlewares=middle)
+app = web.Application()
+
 # route part
 for route in routes:
     app.router.add_route(route[0], route[1], route[2], name=route[3])
@@ -80,7 +82,7 @@ app.cleanup_ctx.append(init_db)
 # end db connect
 
 def try_make_db():
-    log.debug("DB path: ", settings.DB_PATH)
+    log.debug("DB path: " + str(settings.DB_PATH))
     sqlite_db = get_db_path()
     if sqlite_db.exists():
         log.debug("DB exist")
@@ -93,7 +95,8 @@ def try_make_db():
         # conn.commit()
 
         sql = f'CREATE TABLE {settings.USER_COLLECTION} (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT)'
-        log.debug("sql:"+sql)
+        print(sql)
+        #log.debug("sql:"+sql)
         cur.execute(sql)
         conn.commit()
 
