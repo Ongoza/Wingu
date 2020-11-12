@@ -4,11 +4,11 @@ import asyncio
 from aiohttp_session import session_middleware
 # from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
-from aiohttp import web
+from aiohttp import web, WSMsgType
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict
 import aiosqlite
 from pathlib import Path
-from routes import routes
+# from routes import routes
 from middlewares import authorize
 # from motor import motor_asyncio as ma
 # import asyncio
@@ -20,7 +20,7 @@ import server_data
 import hashlib
 import camera
 import ssl
-
+from views.websocket import WebSocket
 import logging
 
 log = logging.getLogger('app')
@@ -30,9 +30,43 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 ch.setFormatter(f)
 log.addHandler(ch)
+camerasListData = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
+
+async def camerasList(request):
+    data = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
+    return  web.json_response(data)
+
+async def WebSocketCmd(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    request.app['websocketscmd'].add(ws)
+    async for msg in ws:
+        if msg.type == WSMsgType.TEXT:
+            if msg.data == 'close':
+                await ws.close()
+            elif msg.data == 'getCameras':
+                # print(camerasListData)
+                await ws.send_json(camerasListData)
+            else:
+                await ws.send_str(msg.data + '/answerError')
+        elif msg.type == WSMsgType.ERROR:
+            print('ws connection closed with exception %s' % ws.exception())
+    print('websocket connection closed')
+    request.app['websocketscmd'].remove(ws)
+    return ws
+
+routes = [
+    ('GET', '/ws',  WebSocket),
+    ('GET', '/wsCmd',  WebSocketCmd),
+    # ('*',   '/login',   Login,     'login'),
+    # ('POST', '/sign/{action}',  Sign,    'sign'),
+    ('GET',  '/camerasList', camerasList),
+]
 
 async def on_shutdown(app):
     for ws in app['websockets']:
+        await ws.close(code=1001, message='Server shutdown')
+    for ws in app['websocketscmd']:
         await ws.close(code=1001, message='Server shutdown')
 # print("SECRET_KEY", SECRET_KEY)
 #middle = [
@@ -40,12 +74,14 @@ async def on_shutdown(app):
 #    authorize,
 #]
 
+
+
 #app = web.Application(middlewares=middle)
 app = web.Application()
 
 # route part
 for route in routes:
-    app.router.add_route(route[0], route[1], route[2], name=route[3])
+    app.router.add_route(route[0], route[1], route[2])
 app['static_root_url'] = '/static'
 app.router.add_static('/static', 'static', name='static')
 # app.router.add_static('/', 'index', name='static')
@@ -55,7 +91,18 @@ app.router.add_static('/static', 'static', name='static')
 async def background_process():
     while True:
         log.debug('Run background task each 1 min')
-        await asyncio.sleep(60)
+        print("len websocketscmd:", str(len(app['websocketscmd'])))
+        if len(app['websocketscmd'])>0:
+            print("start send back")
+            try:
+                for client in app['websocketscmd']:
+                    await client.send_json({'camera':[1,2,3]})
+            except:
+                print("Unexpected error:", sys.exc_info()[0])
+                raise
+        else:
+            print("len=0")
+        await asyncio.sleep(6)
 async def start_background_tasks(app):
     app['dispatch'] = asyncio.create_task(background_process())
 async def cleanup_background_tasks(app):
@@ -103,7 +150,7 @@ def try_make_db():
 try_make_db()
 
 app.on_cleanup.append(on_shutdown)
-app['websockets'] = []
+app['websocketscmd'] = set()
 
 #  start Camera Object
 cam = camera.Camera("testCamera", log)

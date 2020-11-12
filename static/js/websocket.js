@@ -1,78 +1,47 @@
-$(document).ready(function(){
-    var sock = {};
-    try{
-        sock = new WebSocket('ws://' + window.location.host + '/ws');
-    }
-    catch(err){
-        sock = new WebSocket('wss://' + window.location.host + '/ws');
-    }
+var wsCmd = null;
+function WebSocketCmd() {
+            
+            if ("WebSocket" in window) {
+               console.log("WebSocket is supported by your Browser!");
+               // Let us open a web socket
+               wsCmd = new WebSocket("ws://localhost:8080/wsCmd");
+				
+               wsCmd.onopen = function() {
+                  
+                  // Web Socket is connected, send data using send()
+                  //wsCmd.send("Message!!!!");
+                  console.log("WebSocket started!");
+               };
+				
+               wsCmd.onmessage = function (evt) { 
+                  // var received_msg = evt.data;
+                  console.log("Message is received: ", evt.data);
+                  try{
 
-    // show message in div#subscribe
-    function showMessage(message) {
-        var messageElem = $('#subscribe'),
-            height = 0,
-            date = new Date(),
-            options = { hour12: false },
-            htmlText = '[' + date.toLocaleTimeString('en-US', options) + '] ';
+                      let jsonData = JSON.parse(evt.data);
+                      console.log("Message is received: ", jsonData);
+                      if(jsonData.hasOwnProperty('cameras')){
+                            console.log("cameras list updating...");
+                            jsonData.cameras.forEach((row) => { addRow(row); });
+                      }else if(jsonData.hasOwnProperty('camera')){
+                        console.log("!!!camera data updating...", jsonData);
+                      }else{
+                        console.log("Can not detect websocket command!!", evt.data);
+                      }
+                  }catch (error) {
+                        console.error(error);
+                  }
+               };
 
-        try{
-            var messageObj = JSON.parse(message);
-            if (!!messageObj.user && !!messageObj.msg){
-                htmlText = htmlText  +
-                '<span class="user">' + messageObj.user + '</span>: ' + messageObj.msg + '\n';
+				
+               wsCmd.onclose = function() {   
+                  // websocket is closed.
+
+                  console.log("Connection is closed..."); 
+               };
             } else {
-                htmlText = htmlText + message;
+              
+               // The browser doesn't support WebSocket
+               console.log("WebSocket NOT supported by your Browser!");
             }
-        } catch (e){
-            htmlText = htmlText + message;
-        }
-        messageElem.append($('<p>').html(htmlText));
-
-        messageElem.find('p').each(function(i, value){
-            height += parseInt($(this).height());
-        });
-        messageElem.animate({scrollTop: height});
-    }
-
-    function sendMessage(){
-        var msg = $('#message');
-        sock.send(msg.val());
-        msg.val('').focus();
-    }
-
-    sock.onopen = function(){
-        showMessage('Connection to server started');
-    };
-
-    // send message from form
-    $('#submit').click(function() {
-        sendMessage();
-    });
-
-    $('#message').keyup(function(e){
-        if(e.keyCode == 13){
-            sendMessage();
-        }
-    });
-
-    // income message handler
-    sock.onmessage = function(event) {
-        showMessage(event.data);
-    };
-
-    $('#signout').click(function(){
-        window.location.href = "signout";
-    });
-
-    sock.onclose = function(event){
-        if(event.wasClean){
-            showMessage('Clean connection end');
-        }else{
-            showMessage('Connection broken');
-        }
-    };
-
-    sock.onerror = function(error){
-        showMessage(error);
-    };
-});
+         }
