@@ -31,7 +31,7 @@ const divNav = `
                 <div class="form-inline">
                     <div class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" id="langSwitch"><span class="flag-icon flag-icon-en"></span>en</a>
-                        <div class="dropdown-menu" aria-labelledby="dropdown09">
+                        <div class="dropdown-menu" id="dropdown-menu-lang" aria-labelledby="dropdown09">
                             <a class="dropdown-item" href="#en" id="en"><span class="flag-icon flag-icon-en"></span>en</a>
                             <a class="dropdown-item" href="#ru" id="ru"><span class="flag-icon flag-icon-ru"></span>ru</a>
                         </div>
@@ -82,7 +82,7 @@ $(document).ready(function() {
         $('#menu_'+curId).addClass("active");
         translate();
         // $("#menu_Home").text("ffff");
-        $(".dropdown-menu").on('click', 'a', function(){
+        $("#dropdown-menu-lang").on('click', 'a', function(){
                 curLang =  $(this)[0].id;
                 // console.log($("#dropdown").text());
                 $("#langSwitch").html('<span class="flag-icon flag-icon-'+curLang+'"></span>'+curLang);
