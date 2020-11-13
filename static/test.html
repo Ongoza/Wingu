@@ -1,0 +1,115 @@
+<html>
+<head>
+    <script src="lib/jquery-3.5.1.min.js"></script>
+    <script src="lib/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="lib/bootstrap.min.css">
+    <link rel="stylesheet" href="lib/vis-timeline-graph2d.min.css">
+    <script src="lib/vis-timeline-graph2d.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js" integrity="sha512-qTXRIMyZIFb8iQcfjXWCO8+M5Tbc38Qi5WzdPOYZHIlZpzBHG3L3by84BBBOiRGiEb7KKtAOAs5qYdUiZiQNNQ==" crossorigin="anonymous"></script>
+    <!--
+
+
+        <script src="lib/vis.js"></script>
+        <script type="javascript" src=" https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" />
+       <script type="javascript" src=" https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js></script>  -->
+    <style type="text/css">
+        .group-1 { fill: #f2ea00; fill-opacity: 0; stroke-width: 2px; stroke: #173fda;}
+        .group-2 { fill: #f2eaff; fill-opacity: 0; stroke-width: 2px; stroke: #ff0000;
+        }
+    </style>
+</head>
+<body>
+    <div id="camerasTable">
+        <table class="table table-striped">
+            <thead class="thead-dark">
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">First</th>
+                    <th scope="col">Last</th>
+                    <th scope="col">Handle</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th scope="row">1</th>
+                    <td>Mark</td>
+                    <td>Otto</td>
+                    <td>@mdo</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="visualization"></div>
+
+    <script type="text/javascript">
+
+        var groups = new vis.DataSet();
+        groups.add({ id: 0, 
+           style: 'fill:#FFFFFF;fill-opacity:0;stroke-width:1px;stroke:#00ff21', 
+           content: "IN", options: { yAxisOrientation: 'left',  drawPoints: false} });
+        groups.add({ id: 1, 
+            style: 'fill:#FFFFFF;fill-opacity:0;stroke-width:1px;stroke:#0021ff',
+            content: "OUT", options: { yAxisOrientation: 'left',  drawPoints: false } });
+
+        var container = document.getElementById('visualization');
+        var items = [
+            {x: '2014-06-12 00:00:00', y: 0 , group: 0, label:{content:0}},
+            {x: '2014-06-12 01:00:00', y: 30, group: 0},
+            {x: '2014-06-12 02:00:00', y: 10, group: 0},
+            {x: '2014-06-12 00:00:00', y: -10 , group: 1},
+            {x: '2014-06-12 01:00:00', y: -60, group: 1},
+            {x: '2014-06-12 02:00:00', y: -10, group: 1},
+            {x: '2014-06-12 06:00:00', y: 15, group: 0},
+            {x: '2014-06-12 08:00:00', y: 30, group: 0},
+            {x: '2014-06-12 10:00:00', y: 10, group: 0},
+            {x: '2014-06-12 12:00:00', y: 15, group: 0},
+            {x: '2014-06-12 18:00:00', y: 52, group: 0},
+            {x: '2014-06-12 21:00:00', y: 10, group: 0},
+            {x: '2014-06-13 00:00:00', y: 20, group: 0},
+            {x: '2014-06-13 03:00:00', y: 600, group: 0},
+            {x: '2014-06-13 06:00:00', y: 100, group: 0},
+            {x: '2014-06-13 09:00:00', y: 250, group: 0},
+            {x: '2014-06-13 12:00:00', y: 300, group: 0},
+            {x: '2014-06-13 15:00:00', y: 200, group: 0},
+            {x: '2014-06-13 18:00:00', y: 600, group: 0},
+            {x: '2014-06-13 21:00:00', y: 1000, group: 0},
+            {x: '2014-06-13 22:00:00', y: 250, group: 0},
+            {x: '2014-06-13 23:00:00', y: 300, group: 0},
+            {x: '2014-06-12 06:00:00', y: -15, group: 1},
+            {x: '2014-06-12 08:00:00', y: -30, group: 1},
+            {x: '2014-06-12 10:00:00', y: -10, group: 1},
+            {x: '2014-06-12 12:00:00', y: -15, group: 1},
+            {x: '2014-06-12 18:00:00', y: -52, group: 1},
+            {x: '2014-06-12 21:00:00', y: -10, group: 1},
+            {x: '2014-06-13 00:00:00', y: -20, group: 1},
+            {x: '2014-06-13 03:00:00', y: -600, group: 1},
+            {x: '2014-06-13 06:00:00', y: -100, group: 1},
+            {x: '2014-06-13 09:00:00', y: -250, group: 1},
+            {x: '2014-06-13 12:00:00', y: -300, group: 1},
+            {x: '2014-06-13 15:00:00', y: -200, group: 1},
+            {x: '2014-06-13 18:00:00', y: -600, group: 1},
+            {x: '2014-06-13 21:00:00', y: -1000, group: 1},
+            {x: '2014-06-13 22:00:00', y: -250, group: 1},
+            {x: '2014-06-13 23:00:00', y: -300, group: 1}
+        ];
+
+        var dataset = new vis.DataSet(items);
+        var options = { 
+            autoResize: true,
+            dataAxis: {showMinorLabels: false, right: { title: { text: 'Title (right axis)'}}},
+            legend: {left:{position:"bottom-left"}},
+            //start: '2014-06-12 00:00:00',
+            //end: '2014-06-13 10:00:00',
+            //zoomKey: 'altKey',
+        };
+        
+        var graph2d = new vis.Graph2d(container, items, groups, options);
+
+        function showIcons(show) {graph2d.setOptions({dataAxis: {icons: show}});}
+
+    </script>
+
+</body>
+</html>

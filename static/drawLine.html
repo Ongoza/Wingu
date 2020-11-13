@@ -1,0 +1,108 @@
+<html>
+<head>
+
+    <script>
+
+        function change(){
+            let LongLine = document.getElementById('LongLine');
+            LongLine.setAttribute('y1', '100');
+        }
+    </script>
+</head>
+<body>
+
+    <br>
+    <p>fsdfsdfsdfsd</p>
+    <br>
+    <div style="width:500px;height:500px;position:relative;margin:0px;background-image:url('img/back.jpg');background-repeat:no-repeat;">
+        <svg style="border:1px solid black;z-index:9;" width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" onload="makeDraggable(evt)">
+            <style>
+                .static {
+                    cursor: not-allowed;
+                }
+
+                .draggable {
+                    cursor: move;
+                }
+            </style>
+
+            <script type="text/javascript">
+                <![CDATA[
+                function makeDraggable(evt) {
+                var LongLine = null;
+                var svg = evt.target;
+                svg.addEventListener('mousedown', startDrag);
+                svg.addEventListener('mousemove', drag);
+                svg.addEventListener('mouseup', endDrag);
+                svg.addEventListener('mouseleave', endDrag);
+                svg.addEventListener('touchstart', startDrag);
+                svg.addEventListener('touchmove', drag);
+                svg.addEventListener('touchend', endDrag);
+                svg.addEventListener('touchleave', endDrag);
+                svg.addEventListener('touchcancel', endDrag);
+                var selectedElement, offset, transform, 
+                bbox, minX, maxX, minY, maxY, confined;
+                var boundaryX1 = 10.5;
+                var boundaryX2 = 30;
+                var boundaryY1 = 2.2;
+                var boundaryY2 = 19.2;
+
+                function getMousePosition(evt) {
+                var CTM = svg.getScreenCTM();
+                if (evt.touches) { evt = evt.touches[0]; }
+                return {
+                x: (evt.clientX - CTM.e) / CTM.a,
+                y: (evt.clientY - CTM.f) / CTM.d
+                };
+                }
+
+                function startDrag(evt) {
+                if (evt.target.classList.contains('draggable')) {
+                selectedElement = evt.target;
+                let n = evt.target.id.lastIndexOf("_");
+                console.log(evt.target.id.substring(0,n));
+                LongLine = document.getElementById(evt.target.id.substring(0,n));
+                
+                offset = getMousePosition(evt);
+                var transforms = selectedElement.transform.baseVal;
+                if (transforms.length === 0 || transforms.getItem(0).type !== SVGTransform.SVG_TRANSFORM_TRANSLATE) {
+                var translate = svg.createSVGTransform();
+                translate.setTranslate(0, 0);
+                selectedElement.transform.baseVal.insertItemBefore(translate, 0);
+                }
+                transform = transforms.getItem(0);
+                offset.x -= transform.matrix.e;
+                offset.y -= transform.matrix.f;
+                }
+                }
+
+                function drag(evt) {
+                if (selectedElement) {
+                evt.preventDefault();
+                var coord = getMousePosition(evt);
+                var dx = coord.x - offset.x;
+                var dy = coord.y - offset.y;
+                transform.setTranslate(dx, dy);
+                if(selectedElement.id.includes("start")){
+                LongLine.setAttribute('x1', coord.x);
+                LongLine.setAttribute('y1', coord.y);
+                }else{
+                LongLine.setAttribute('x2', coord.x);
+                LongLine.setAttribute('y2', coord.y);
+                }
+                }
+                //console.log(LongLine.getAttribute("transform"));
+                }
+
+                function endDrag(evt) {selectedElement = false;}
+                }
+                ]]></script>
+
+            <line class="static" id="line_0" x1="20" y1="20" x2="100" y2="100" stroke-width="2" stroke="black" />
+            
+            <circle class="draggable" id="line_0_start" cx="20" cy="20" r="5" stroke="blue" stroke-width="1" fill="#00ff21" />
+            <circle class="draggable" id="line_0_end" cx="100" cy="100" r="5" stroke="blue" stroke-width="1" fill="#ff0021" />
+        </svg></div>
+    <a href="#" onclick="change();">Click</a>
+</body>
+</html>
