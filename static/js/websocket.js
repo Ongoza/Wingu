@@ -1,3 +1,6 @@
+﻿//TODO
+//    отправка id сессии для проверки прав доступа   
+
 var wsCmd = null;
 function WebSocketCmd() {
             

@@ -1,13 +1,18 @@
-﻿ var curLang = 'en';
- var curId = 'index';
- var langPack = {
+﻿// TODO
+//
+
+var curLang = 'en';
+var curId = 'index';
+var langPack = {
 
         };
         
- var langText = {
+var langText = {
         index: {en:"Home", ru: "Начало"},
         cameras: {en:"Cameras", ru: "Камеры"},
         config: {en:"Config", ru: "Настройки"},
+        config: {en:"Server", ru: "Сервер"},
+        config: {en:"File", ru: "Файл"},
         log: {en:"Log", ru: "Log"},
         about: {en:"About", ru: "О системе"},
 
@@ -24,6 +29,8 @@ const divNav = `
                 <ul class="navbar-nav mr-auto">
                     <li class="nav-item" id='menu_index'><a class="nav-link text" onclick="doMenu(this.id)" href="#" id='index'><span class="sr-only">(current)</span></a></li>
                     <li class="nav-item" id='menu_cameras'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='cameras'></a></li>
+                    <li class="nav-item" id='menu_config'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='file'></a></li>
+                    <li class="nav-item" id='menu_config'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='server'></a></li>
                     <li class="nav-item" id='menu_config'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='config'></a></li>
                     <li class="nav-item" id='menu_log'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='log'></a></li>
                     <li class="nav-item" id='menu_about'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='about'></a></li>
