@@ -29,7 +29,7 @@
             <script type="text/javascript">
                 <![CDATA[
                 function makeDraggable(evt) {
-                var LongLine = null;
+                var LongLine,  LongLine2, startOrNot;
                 var svg = evt.target;
                 svg.addEventListener('mousedown', startDrag);
                 svg.addEventListener('mousemove', drag);
@@ -40,7 +40,7 @@
                 svg.addEventListener('touchend', endDrag);
                 svg.addEventListener('touchleave', endDrag);
                 svg.addEventListener('touchcancel', endDrag);
-                var selectedElement, offset, transform, 
+                var selectedElement, offset, transform,
                 bbox, minX, maxX, minY, maxY, confined;
                 var boundaryX1 = 10.5;
                 var boundaryX2 = 30;
@@ -61,8 +61,11 @@
                 selectedElement = evt.target;
                 let n = evt.target.id.lastIndexOf("_");
                 console.log(evt.target.id.substring(0,n));
-                LongLine = document.getElementById(evt.target.id.substring(0,n));
-                
+                let lineName = evt.target.id.substring(0,n);
+                LongLine = document.getElementById(lineName);
+                LongLine2 = document.getElementById(lineName+'1');
+                selectedElement.id.includes("start") ? startOrNot = true : startOrNot = false;
+                console.log("startOrNot",startOrNot);
                 offset = getMousePosition(evt);
                 var transforms = selectedElement.transform.baseVal;
                 if (transforms.length === 0 || transforms.getItem(0).type !== SVGTransform.SVG_TRANSFORM_TRANSLATE) {
@@ -83,25 +86,56 @@
                 var dx = coord.x - offset.x;
                 var dy = coord.y - offset.y;
                 transform.setTranslate(dx, dy);
-                if(selectedElement.id.includes("start")){
+                let x1 = parseInt(LongLine.getAttribute('x1'));
+                let y1 = parseInt(LongLine.getAttribute('y1'));
+                let x2 = parseInt(LongLine.getAttribute('x2'));
+                let y2 = parseInt(LongLine.getAttribute('y2'));
+                let dx2 = x2-x1;
+                let dy2 = y2-y1;
+                let dx28 = Math.floor(dx2/16);
+                let dy28 = Math.floor(dy2/16);
+                if(dy2 == 0){ dy2 = 0.0001;}
+                if(dx2 == 0){ dx2 = 0.0001;}
+                if(startOrNot){
                 LongLine.setAttribute('x1', coord.x);
                 LongLine.setAttribute('y1', coord.y);
+                LongLine2.setAttribute('x2', x2 - dy28);
+                LongLine2.setAttribute('y2', y2 + dx28);
+                LongLine2.setAttribute('x1', coord.x - dy28);
+                LongLine2.setAttribute('y1', coord.y + dx28);
                 }else{
                 LongLine.setAttribute('x2', coord.x);
                 LongLine.setAttribute('y2', coord.y);
-                }
-                }
-                //console.log(LongLine.getAttribute("transform"));
+                LongLine2.setAttribute('x1', x1 - dy28);
+                LongLine2.setAttribute('y1', y1 + dx28);
+                LongLine2.setAttribute('x2', coord.x - dy28);
+                LongLine2.setAttribute('y2', coord.y + dx28);
                 }
 
-                function endDrag(evt) {selectedElement = false;}
+
+                // 0.785398163
+                // console.log("dx2",  Math.ceil(Math.atan(dx2/dy2)* (180/Math.PI)));
+                }
+                }
+
+                function endDrag(evt) {
+                selectedElement = false;
+                LongLine = null;
+                LongLine2 = null;
+                }
                 }
                 ]]></script>
 
-            <line class="static" id="line_0" x1="20" y1="20" x2="100" y2="100" stroke-width="2" stroke="black" />
-            
-            <circle class="draggable" id="line_0_start" cx="20" cy="20" r="5" stroke="blue" stroke-width="1" fill="#00ff21" />
-            <circle class="draggable" id="line_0_end" cx="100" cy="100" r="5" stroke="blue" stroke-width="1" fill="#ff0021" />
+            <line class="static" id="0_line" x1="200" y1="200" x2="100" y2="100" stroke-width="2" stroke="#00ff21" />
+            <line class="static" id="0_line1" x1="200" y1="204" x2="100" y2="104" stroke-width="2" stroke="#ff0021" />
+            <circle class="draggable" id="0_line_start" cx="200" cy="200" r="5" stroke="blue" stroke-width="1" fill="#00ff21" />
+            <circle class="draggable" id="0_line_end" cx="100" cy="100" r="5" stroke="blue" stroke-width="1" fill="#ff0021" />
+
+            <line class="static" id="1_line" x1="300" y1="300" x2="250" y2="400" stroke-width="2" stroke="#00ff21" />
+            <line class="static" id="1_line1" x1="300" y1="304" x2="250" y2="404" stroke-width="2" stroke="#ff0021" />
+            <circle class="draggable" id="1_line_start" cx="300" cy="300" r="5" stroke="blue" stroke-width="1" fill="#00ff21" />
+            <circle class="draggable" id="1_line_end" cx="250" cy="400" r="5" stroke="blue" stroke-width="1" fill="#ff0021" />
+
         </svg></div>
     <a href="#" onclick="change();">Click</a>
 </body>
