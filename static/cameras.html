@@ -163,7 +163,7 @@
         function getCamerasList(){
         if (wsCmd!=null){
         if (wsCmd.readyState == 1){
-        wsCmd.send("getCameras");
+            wsCmd.send(JSON.stringify({ cmd: "getCameras" }));
         }else{
         console.log("Websocket is not ready. Wait a sec.")
         setTimeout(() => { getCamerasList(); }, 500);
@@ -174,8 +174,8 @@
         $(document).ready(function() {
         showCamList();
         //getCamerasListAjax();
-        //addRow(['id','name','online','counting','comments','url','borders']);
-        WebSocketCmd();
+            //addRow(['id','name','online','counting','comments','url','borders']);
+        if (wsCmd==null) { WebSocketCmd(); }
         getCamerasList();
         });
     </script>

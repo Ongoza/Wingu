@@ -1,0 +1,28 @@
+﻿<!--
+    TODO
+        отображает результаты видео обработки для заданного видео потока
+        отображает стастику для данного потока 
+            количество вошедших для каждой линии
+            загрузку карты процессом
+-->
+
+<html>
+<head>
+    <link href="lib/bootstrap.min.css" rel="stylesheet">
+    <script src="lib/bootstrap.min.js"></script>
+    <script src="lib/bootstrap.min.js"></script>
+
+    <script>
+        // var url_string = window.location.href; // "http://www.example.com/t.html?a=1&b=3&c=m2-m3-m4-m5"; //
+        const queryString =  window.location.search; //= “?s=flexbox”
+        const urlParams = new URLSearchParams(queryString);
+        if(urlParams.has('file_id'){
+        const file_id = urlParams.get('file_id');
+        console.log(file_id);
+        }else{console.log("Error open file");}
+
+    </script>
+</head>
+<body>
+</body>
+</html>

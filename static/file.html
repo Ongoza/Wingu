@@ -1,6 +1,9 @@
 ﻿<!--
     TODO
     окно добавляения локального файла для подсчета
+    принимает json от сервера со списком локальных видео файлов (папка ключ, массив video files only!!!)
+    примает  картинку из видеофайла от сервера
+    отображает картинку внизу панели о файле
     опции
         путь к файлу - сделать окно поиска
         границы (загрузить из существующей камеры или создать новые)
@@ -25,8 +28,63 @@
     <!-- <script src="js/websocket.js"></script> -->
 
     <script src="js/nav.js"></script>
+    <script src="js/websocket.js"></script>
     <script>
+        var curVideoFilePath = 'video/39.avi';
+        // json data structure:  name, size in GB, creaction time
+        var fileList;
 
+        function getFileImg(videoPath) {
+            if (wsCmd != null) {
+                if (wsCmd.readyState == 1) {
+                    wsCmd.send(JSON.stringify({ cmd: 'getFileImag', data: videoPath }));
+                    
+                } else {
+                    console.log("Websocket is not ready. Wait a sec.")
+                    setTimeout(() => { getFileImg(videoPath); }, 500);
+                }
+            } else { console.log("Error websocket does not exist!!"); }
+        }
+
+
+        function getFilesListAjax() {
+            var jqxhr = $.ajax("http://localhost:8080/filesList")
+                .done(function (data) {
+                    console.log("success ajax", data);
+                    try {
+                        fileList = JSON.parse(data);
+                        console.log("success ajax json", fileList);
+                    } catch{
+                        console.log("error ajax json!!!");
+                    }
+                    //data.files.forEach((row) => { addRow(row); });
+                })
+                .fail(function () { console.log("error get ajax"); })
+                .always(function () { console.log("complete ajax request"); });
+        }
+
+        var filesScreens;
+        function getFileScreenshotsAjax(filePath) {
+            var jqxhr = $.ajax("http://localhost:8080/fileImgs?" + filePath)
+                .done(function (data) {
+                    console.log("success ajax", data);
+                    try {
+                        fileList = JSON.parse(data);
+                        console.log("success ajax json", fileList);
+                    } catch{
+                        console.log("error ajax json!!!");
+                    }
+                    //data.files.forEach((row) => { addRow(row); });
+                })
+                .fail(function () { console.log("error get ajax"); })
+                .always(function () { console.log("complete ajax request"); });
+        }
+        $(document).ready(function () {
+            //getFileScreenshotsAjax("file_1=39.avi");
+            if (wsCmd == null) { WebSocketCmd(); }
+            getFileImg('video/39.avi');
+            
+        });
     </script>
 </head>
 <body>
@@ -39,6 +97,7 @@
                 <span class="badge badge-primary">CPU <span id="cpu">0</span>%</span>
                 <span class="badge badge-primary">CPU <span id="cpu_t">0</span>&deg;</span>
                 <span class="badge badge-primary">Mem <span id="mem_load">0</span>%</span>
+                <span class="badge badge-primary">Drive <span id="drive_free">0</span>GB</span>
                 <span class="badge badge-primary">GPU1 <span id="1gpu">0</span>%</span>
                 <span class="badge badge-primary">GPU1 <span id="1gpu_t">0</span>&deg;</span>
                 <span class="badge badge-primary">GPU1 <span id="1gpu_mem">0</span>GB</span>
@@ -62,6 +121,7 @@
                             <th scope="col">Finished in (min)</th>
                             <th scope="col">Stop</th>
                             <th scope="col">Up|Down</th>
+                            <th scope="col">Displey</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -79,6 +139,7 @@
                             <td id="0_queue_finish">0</td>
                             <td><a href="" style="color:red"><span class="fas fa-minus-circle"></span></a></td>
                             <td><a href="" id="0queue_n"><span class="fas fa-chevron-up"></span></a>&nbsp;&nbsp;<a href=""><span class="fas fa-chevron-down"></span></a></a></td>
+                            <td>Show</td>
                         </tr>
                     </tbody>
                 </table>
@@ -99,12 +160,12 @@
 
                         <div class="input-group mb-3">
                             <form class="form-inline mb-3">
-                                <div class="input-group  w-25">
+<!--                                <div class="input-group  w-25">
                                     <div class="input-group-prepend">
                                         <span class="input-group-text">Display result video</span>
                                         <span class="input-group-text"><input type="checkbox" aria-label="Display video here"></span>
                                     </div>
-                                </div>
+                                </div>-->
                                 <div class="input-group  w-50">
                                     <div class="input-group-prepend">
                                         <span class="input-group-text">Proceed each n frame</span>
@@ -152,7 +213,7 @@
 
             <!--
             <label>Progress result:</label>
-            
+
             <br>
                 -->
         </div>
@@ -179,3 +240,4 @@
             </div>
         </div>
 </body>
+</html>

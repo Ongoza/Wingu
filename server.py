@@ -1,3 +1,6 @@
+﻿#TODO
+# сервер запускает менеджер ресурсов (GPUs and CPU)
+# менеджер ресурсов запускает менеджер потоков на которых уже крутятяся разные видеостримы
 #! /usr/bin/env python
 import asyncio
 # import aiohttp_debugtoolbar
@@ -14,7 +17,9 @@ from middlewares import authorize
 # import asyncio
 import io
 import sqlite3
-
+import cv2 
+import json
+import os
 import settings
 import server_data
 import hashlib
@@ -36,19 +41,60 @@ async def camerasList(request):
     data = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
     return  web.json_response(data)
 
+async def filesList(request):
+    #params = request.rel_url.query
+    #print(params)
+    #print(params['file_1'])
+    #// json data structure:  name, size in GB, last change time
+    data = {'files':{'39.avi':[0.4,'20.10.2020'], 'new':{'45.avi':[0.4,'20.10.2020']}}};
+    return  web.json_response(data)
+
+def getImg(pathFile):    
+        print("fileName", fileName, os.getcwd())
+        #vidcap = cv2.VideoCapture(fileName)
+        vidcap = cv2.VideoCapture('video/39.avi')
+        print("1=",vidcap)
+        tr, img = vidcap.read()
+        print("2=", tr)
+        return cv2.imencode('.JPEG', img)
+
+    
 async def WebSocketCmd(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
     request.app['websocketscmd'].add(ws)
+    
+    #totalFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
-            if msg.data == 'close':
-                await ws.close()
-            elif msg.data == 'getCameras':
-                # print(camerasListData)
-                await ws.send_json(camerasListData)
-            else:
-                await ws.send_str(msg.data + '/answerError')
+            try:
+                print("data=", type(msg.data), msg.data)
+                msg_json = json.loads(msg.data)
+                print("json=", type(msg_json), msg_json['cmd'])
+                if msg_json['cmd'] == 'close':
+                    await ws.close()
+                elif msg_json['cmd'] == 'getCameras':
+                    # print(camerasListData)
+                    await ws.send_json(camerasListData)
+                elif msg_json['cmd'] == 'getFileImag':
+                    print("start getFileImag", msg_json['data'])
+                    try:
+                        fileName = msg_json['data']  #'video/39.avi'
+                        if os.path.isfile(fileName):
+                            vidcap = cv2.VideoCapture(fileName)
+                            img = vidcap.read()[1]
+                            res = cv2.imencode('.JPEG', img)[1].tobytes()
+                            await ws.send_bytes(res)
+                        else:
+                            print(fileName,"can not find file")
+                            await ws.send_json({'error':[fileName,"can not find file"]})
+                    except:
+                        print(fileName,"can not open file")
+                        await ws.send_json({'error':[fileName,"can not open file"]})
+                else:
+                    await ws.send_json({'error':{'unknown', msg.data}})
+            except:
+                await ws.send_json({'error':["can not parse json", msg.data]})
         elif msg.type == WSMsgType.ERROR:
             print('ws connection closed with exception %s' % ws.exception())
     print('websocket connection closed')
@@ -61,6 +107,8 @@ routes = [
     # ('*',   '/login',   Login,     'login'),
     # ('POST', '/sign/{action}',  Sign,    'sign'),
     ('GET',  '/camerasList', camerasList),
+    #('GET',  '/fileImgs', fileImgs),
+    ('GET',  '/filesList', filesList),
 ]
 
 async def on_shutdown(app):
@@ -102,7 +150,7 @@ async def background_process():
                 raise
         else:
             print("len=0")
-        await asyncio.sleep(6)
+        await asyncio.sleep(60)
 async def start_background_tasks(app):
     app['dispatch'] = asyncio.create_task(background_process())
 async def cleanup_background_tasks(app):
