@@ -49,14 +49,27 @@ async def filesList(request):
     data = {'files':{'39.avi':[0.4,'20.10.2020'], 'new':{'45.avi':[0.4,'20.10.2020']}}};
     return  web.json_response(data)
 
-def getImg(pathFile):    
-        print("fileName", fileName, os.getcwd())
-        #vidcap = cv2.VideoCapture(fileName)
-        vidcap = cv2.VideoCapture('video/39.avi')
-        print("1=",vidcap)
-        tr, img = vidcap.read()
-        print("2=", tr)
-        return cv2.imencode('.JPEG', img)
+async def getFileImg(request):
+    try:
+        print("start getFileImag")
+        if ('file' in request.rel_url.query):
+            fileName = request.rel_url.query['file']
+            print("filaName",fileName) #'video/39.avi'            
+            if os.path.isfile(fileName):
+                vidcap = cv2.VideoCapture(fileName)
+                img = vidcap.read()[1]
+                img = cv2.resize(img, (640,480), interpolation = cv2.INTER_AREA)
+                res = cv2.imencode('.JPEG', img)[1].tobytes()
+                #return web.Response(text="All right!")
+                return web.Response(body=res)
+            else:
+                print(fileName,"can not find file")
+                return web.json_response({'error':["can not find file", fileName]})
+        else:
+            return web.json_response({'error':["can not find file name"]})
+    except:
+        print("can not open file")
+        await web.json_response({'error':[fileName,"can not open file"]})
 
     
 async def WebSocketCmd(request):
@@ -77,20 +90,7 @@ async def WebSocketCmd(request):
                     # print(camerasListData)
                     await ws.send_json(camerasListData)
                 elif msg_json['cmd'] == 'getFileImag':
-                    print("start getFileImag", msg_json['data'])
-                    try:
-                        fileName = msg_json['data']  #'video/39.avi'
-                        if os.path.isfile(fileName):
-                            vidcap = cv2.VideoCapture(fileName)
-                            img = vidcap.read()[1]
-                            res = cv2.imencode('.JPEG', img)[1].tobytes()
-                            await ws.send_bytes(res)
-                        else:
-                            print(fileName,"can not find file")
-                            await ws.send_json({'error':[fileName,"can not find file"]})
-                    except:
-                        print(fileName,"can not open file")
-                        await ws.send_json({'error':[fileName,"can not open file"]})
+                    pass
                 else:
                     await ws.send_json({'error':{'unknown', msg.data}})
             except:
@@ -107,7 +107,7 @@ routes = [
     # ('*',   '/login',   Login,     'login'),
     # ('POST', '/sign/{action}',  Sign,    'sign'),
     ('GET',  '/camerasList', camerasList),
-    #('GET',  '/fileImgs', fileImgs),
+    ('GET',  '/getFileImg', getFileImg),
     ('GET',  '/filesList', filesList),
 ]
 

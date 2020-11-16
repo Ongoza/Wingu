@@ -1,12 +1,98 @@
 <html>
 <head>
-
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script>
+            //<line class="static" id="0_line" x1="200" y1="200" x2="100" y2="100" stroke-width="2" stroke="#00ff21" />
+            //<line class="static" id="0_line_back" x1="200" y1="204" x2="100" y2="104" stroke-width="2" stroke="#ff0021" />
+            //<circle class="draggable" id="0_line_start" cx="200" cy="200" r="5" stroke="blue" stroke-width="1" fill="#00ff21" />
+            //<circle class="draggable" id="0_line_end" cx="100" cy="100" r="5" stroke="blue" stroke-width="1" fill="#ff0021" />
 
-        function change(){
-            let LongLine = document.getElementById('LongLine');
-            LongLine.setAttribute('y1', '100');
+        var fileBorders = {};
+        var fileActiveBorder = null;
+        var fileBorderCircleradius = 6;
+
+        function guidGenerator(len) {
+            let res = '';
+            for (i = 0; i < len; i++) {
+                res += (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
+            };
+            return res;
         }
+
+        function drawNewLineSvg(svg, id, x1, y1, x2, y2, color) {
+            var obj = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            obj.setAttributeNS(null, "x1", x1);
+            obj.setAttributeNS(null, "y1", y1);
+            obj.setAttributeNS(null, "x2", x2);
+            obj.setAttributeNS(null, "y2", y2);
+            obj.setAttributeNS(null, "class", "static")
+            obj.setAttributeNS(null, "id", id)
+            obj.setAttributeNS(null, "stroke", color);
+            obj.setAttributeNS(null, "stroke-width", 4);
+            obj.onclick = function () { setActiveBorder(id); };
+            svg.appendChild(obj);            
+        }
+
+        function drawNewRectSvg(svg, id, x, y, width, height, rot, color){
+            var obj = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            obj.setAttributeNS(null, "x", x);
+            obj.setAttributeNS(null, "y", y);
+            obj.setAttributeNS(null, "width", width);
+            obj.setAttributeNS(null, "class", "static")
+            obj.setAttributeNS(null, "id", id)
+            obj.setAttributeNS(null, "stroke", color);
+            obj.setAttributeNS(null, "fill", 'red');
+            obj.setAttributeNS(null, "height", height);
+            obj.setAttributeNS(null, "transform", 'rotate(' + rot.toString() + ' ' + x.toString() + ' ' + y.toString()+ ')');
+            obj.onclick = function () { setActiveBorder(id); };
+            svg.appendChild(obj);
+        }
+
+        function drawNewCircleSvg(svg, id, cx, cy, color) {
+            var obj = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            obj.setAttributeNS(null, "cx", cx);
+            obj.setAttributeNS(null, "cy", cy);
+            obj.setAttributeNS(null, "r", fileBorderCircleradius);
+            obj.setAttributeNS(null, "class", "draggable")
+            obj.setAttributeNS(null, "id", id)
+            obj.setAttributeNS(null, "stroke", "blue");
+            obj.setAttributeNS(null, "stroke-width", 1);
+            obj.setAttributeNS(null, "fill", color);
+            svg.appendChild(obj);
+        }
+        function setActiveBorder(id) {
+            if (id.includes("_back")) { id = id.substring(0, id.indexOf("_back"));}
+            if (fileActiveBorder != null) {
+                document.getElementById(fileActiveBorder + "_line_start").setAttribute("r", fileBorderCircleradius);
+                document.getElementById(fileActiveBorder + "_line_end").setAttribute( "r", fileBorderCircleradius);
+            }
+            fileActiveBorder = id.substring(0, id.indexOf("_line"));
+            document.getElementById('displayLineName').innerHTML = fileActiveBorder;
+            document.getElementById(id +"_start").setAttribute("r", fileBorderCircleradius*2);
+            document.getElementById(id + "_end").setAttribute("r", fileBorderCircleradius*2);
+
+        }
+
+        function drawBorder(id, x1, y1, x2, y2){
+            let svg = $("#fileSvg")[0];
+            let len = Math.floor(Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y1 - y2, 2)));
+            var angleDeg = Math.floor(Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI) - 90;
+            drawNewRectSvg(svg, id.toString() + '_line_back', x1, y1, 6, len, angleDeg.toString(), "#ff0021");
+            drawNewLineSvg(svg, id.toString() + '_line', x1, y1, x2, y2, "#00ff21");
+            //drawNewLineSvg(svg, id.toString() + '_line_back', x1 - dist[1], y1 + dist[0], x2 - dist[1], y2 + dist[0], "#ff0021");
+            drawNewCircleSvg(svg, id.toString() + "_line_start", x1, y1, "#00ff21");
+            drawNewCircleSvg(svg, id.toString() + "_line_end", x2, y2, "#ff0021");
+        }
+
+        
+        function change() {
+            let name = guidGenerator(2);
+            while (name in drawBorder) { name = guidGenerator(1); }
+            drawBorder(name, 200, 200, 160, 100);
+            fileBorders[name] = [200, 200, 160, 100]
+            console.log(fileBorders);
+        }
+                   
     </script>
 </head>
 <body>
@@ -14,128 +100,99 @@
     <br>
     <p>fsdfsdfsdfsd</p>
     <br>
-    <div style="width:500px;height:500px;position:relative;margin:0px;background-image:url('img/back.jpg');background-repeat:no-repeat;">
-        <svg style="border:1px solid black;z-index:9;" width="500" height="500" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg" onload="makeDraggable(evt)">
-            <style>
-                .static {
-                    cursor: not-allowed;
-                }
-
-                .draggable {
-                    cursor: move;
-                }
-            </style>
+    <div id="displayLineName">dd</div>
+    <div  id="fileModalImg" style="width:640px;height:480px;position:relative;margin:0px; background-image:url('img/back.jpg');background-repeat:no-repeat;">
+        <svg id="fileSvg" style="border:1px solid black;z-index:9;" width="640" height="480" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg" onload="makeDraggable(evt)">
+            <style> .static {} .draggable {cursor: move;}</style>
 
             <script type="text/javascript">
                 <![CDATA[
-                function makeDraggable(evt) {
-                var LongLine,  LongLine2, startOrNot;
-                var svg = evt.target;
-                svg.addEventListener('mousedown', startDrag);
-                svg.addEventListener('mousemove', drag);
-                svg.addEventListener('mouseup', endDrag);
-                svg.addEventListener('mouseleave', endDrag);
-                svg.addEventListener('touchstart', startDrag);
-                svg.addEventListener('touchmove', drag);
-                svg.addEventListener('touchend', endDrag);
-                svg.addEventListener('touchleave', endDrag);
-                svg.addEventListener('touchcancel', endDrag);
-                var selectedElement, offset, transform,
-                bbox, minX, maxX, minY, maxY, confined;
-                var boundaryX1 = 10.5;
-                var boundaryX2 = 30;
-                var boundaryY1 = 2.2;
-                var boundaryY2 = 19.2;
+                    function makeDraggable(evt) {
+                        var LongLine,  LongLine2, startOrNot;
+                        var svg = evt.target;
+                        svg.addEventListener('mousedown', startDrag);
+                        svg.addEventListener('mousemove', drag);
+                        svg.addEventListener('mouseup', endDrag);
+                        svg.addEventListener('mouseleave', endDrag);
+                        svg.addEventListener('touchstart', startDrag);
+                        svg.addEventListener('touchmove', drag);
+                        svg.addEventListener('touchend', endDrag);
+                        svg.addEventListener('touchleave', endDrag);
+                        svg.addEventListener('touchcancel', endDrag);
+                        var selectedElement, offset, transform;
 
-                function getMousePosition(evt) {
-                var CTM = svg.getScreenCTM();
-                if (evt.touches) { evt = evt.touches[0]; }
-                return {
-                x: (evt.clientX - CTM.e) / CTM.a,
-                y: (evt.clientY - CTM.f) / CTM.d
-                };
-                }
+                        function getMousePosition(evt) {
+                            var CTM = svg.getScreenCTM();
+                            if (evt.touches) { evt = evt.touches[0]; }
+                            return {
+                                x: (evt.clientX - CTM.e) / CTM.a,
+                                y: (evt.clientY - CTM.f) / CTM.d
+                            };
+                        }
 
-                function startDrag(evt) {
-                if (evt.target.classList.contains('draggable')) {
-                selectedElement = evt.target;
-                let n = evt.target.id.lastIndexOf("_");
-                console.log(evt.target.id.substring(0,n));
-                let lineName = evt.target.id.substring(0,n);
-                LongLine = document.getElementById(lineName);
-                LongLine2 = document.getElementById(lineName+'1');
-                selectedElement.id.includes("start") ? startOrNot = true : startOrNot = false;
-                console.log("startOrNot",startOrNot);
-                offset = getMousePosition(evt);
-                var transforms = selectedElement.transform.baseVal;
-                if (transforms.length === 0 || transforms.getItem(0).type !== SVGTransform.SVG_TRANSFORM_TRANSLATE) {
-                var translate = svg.createSVGTransform();
-                translate.setTranslate(0, 0);
-                selectedElement.transform.baseVal.insertItemBefore(translate, 0);
-                }
-                transform = transforms.getItem(0);
-                offset.x -= transform.matrix.e;
-                offset.y -= transform.matrix.f;
-                }
-                }
+                        function startDrag(evt) {
+                            if (evt.target.classList.contains('draggable')) {
+                                selectedElement = evt.target;
+                                //console.log("evt.target", evt.target.id);
+                                let n = evt.target.id.lastIndexOf("_");
+                                let lineName = evt.target.id.substring(0, n);
+                                setActiveBorder(lineName);
+                                LongLine = document.getElementById(lineName);
+                                LongLine2 = document.getElementById(lineName+'_back');
+                                selectedElement.id.includes("start") ? startOrNot = true : startOrNot = false;
+                                offset = getMousePosition(evt);
+                                transforms = selectedElement.transform.baseVal;
+                                if (transforms.length === 0 || transforms.getItem(0).type !== SVGTransform.SVG_TRANSFORM_TRANSLATE) {
+                                    var translate = svg.createSVGTransform();
+                                    translate.setTranslate(0, 0);
+                                    selectedElement.transform.baseVal.insertItemBefore(translate, 0);
+                                }
+                                transform = transforms.getItem(0);
+                                offset.x -= transform.matrix.e;
+                                offset.y -= transform.matrix.f;
+                            }
+                        }
 
-                function drag(evt) {
-                if (selectedElement) {
-                evt.preventDefault();
-                var coord = getMousePosition(evt);
-                var dx = coord.x - offset.x;
-                var dy = coord.y - offset.y;
-                transform.setTranslate(dx, dy);
-                let x1 = parseInt(LongLine.getAttribute('x1'));
-                let y1 = parseInt(LongLine.getAttribute('y1'));
-                let x2 = parseInt(LongLine.getAttribute('x2'));
-                let y2 = parseInt(LongLine.getAttribute('y2'));
-                let dx2 = x2-x1;
-                let dy2 = y2-y1;
-                let dx28 = Math.floor(dx2/16);
-                let dy28 = Math.floor(dy2/16);
-                if(dy2 == 0){ dy2 = 0.0001;}
-                if(dx2 == 0){ dx2 = 0.0001;}
-                if(startOrNot){
-                LongLine.setAttribute('x1', coord.x);
-                LongLine.setAttribute('y1', coord.y);
-                LongLine2.setAttribute('x2', x2 - dy28);
-                LongLine2.setAttribute('y2', y2 + dx28);
-                LongLine2.setAttribute('x1', coord.x - dy28);
-                LongLine2.setAttribute('y1', coord.y + dx28);
-                }else{
-                LongLine.setAttribute('x2', coord.x);
-                LongLine.setAttribute('y2', coord.y);
-                LongLine2.setAttribute('x1', x1 - dy28);
-                LongLine2.setAttribute('y1', y1 + dx28);
-                LongLine2.setAttribute('x2', coord.x - dy28);
-                LongLine2.setAttribute('y2', coord.y + dx28);
-                }
+                        function drag(evt) {
+                            if (selectedElement) {
+                                evt.preventDefault();
+                                var coord = getMousePosition(evt);
+                                var dx = coord.x - offset.x;
+                                var dy = coord.y - offset.y;
+                                transform.setTranslate(dx, dy);
+                                let x1, y1, x2, y2;
+                                if (startOrNot) {
+                                    x1 = coord.x;
+                                    y1 = coord.y;
+                                    x2 = parseInt(LongLine.getAttribute('x2'));
+                                    y2 = parseInt(LongLine.getAttribute('y2'));
+                                    LongLine.setAttribute('x1', x1);
+                                    LongLine.setAttribute('y1', y1);
+                                } else {
+                                    x1 = parseInt(LongLine.getAttribute('x1'));
+                                    y1 = parseInt(LongLine.getAttribute('y1'));
+                                    x2 = coord.x;
+                                    y2 = coord.y;
+                                    LongLine.setAttribute('x2', x2);
+                                    LongLine.setAttribute('y2', y2);
+                                } 
+                                let len = Math.floor(Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y1 - y2, 2)));
+                                var rot = Math.floor(Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI) - 90;
+                                LongLine2.setAttribute('x', x1);
+                                LongLine2.setAttribute('y', y1);
+                                LongLine2.setAttribute("height", len);
+                                LongLine2.setAttribute("transform", 'rotate(' + rot.toString() + ' ' + x1.toString() + ' ' + y1.toString() + ')');
+                            }
+                        }
 
-
-                // 0.785398163
-                // console.log("dx2",  Math.ceil(Math.atan(dx2/dy2)* (180/Math.PI)));
-                }
-                }
-
-                function endDrag(evt) {
-                selectedElement = false;
-                LongLine = null;
-                LongLine2 = null;
-                }
-                }
-                ]]></script>
-
-            <line class="static" id="0_line" x1="200" y1="200" x2="100" y2="100" stroke-width="2" stroke="#00ff21" />
-            <line class="static" id="0_line1" x1="200" y1="204" x2="100" y2="104" stroke-width="2" stroke="#ff0021" />
-            <circle class="draggable" id="0_line_start" cx="200" cy="200" r="5" stroke="blue" stroke-width="1" fill="#00ff21" />
-            <circle class="draggable" id="0_line_end" cx="100" cy="100" r="5" stroke="blue" stroke-width="1" fill="#ff0021" />
-
-            <line class="static" id="1_line" x1="300" y1="300" x2="250" y2="400" stroke-width="2" stroke="#00ff21" />
-            <line class="static" id="1_line1" x1="300" y1="304" x2="250" y2="404" stroke-width="2" stroke="#ff0021" />
-            <circle class="draggable" id="1_line_start" cx="300" cy="300" r="5" stroke="blue" stroke-width="1" fill="#00ff21" />
-            <circle class="draggable" id="1_line_end" cx="250" cy="400" r="5" stroke="blue" stroke-width="1" fill="#ff0021" />
-
+                        function endDrag(evt) {
+                            selectedElement = false;
+                            LongLine = null;
+                            LongLine2 = null;
+                        }
+                    }
+                ]]>
+            </script>
         </svg></div>
     <a href="#" onclick="change();">Click</a>
 </body>
