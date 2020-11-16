@@ -11,11 +11,13 @@
         var fileActiveBorder = null;
         var fileBorderCircleradius = 6;
 
-        function guidGenerator(len) {
+        function guidGenerator(len, list, cnt) {
             let res = '';
-            for (i = 0; i < len; i++) {
-                res += (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);
-            };
+            for (i = 0; i < len; i++) {res += (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1);};
+            if (res in list) {
+                if (cnt < 6) {res = guidGenerator(len, list, cnt);
+                } else { return ""; }
+            }
             return res;
         }
 
@@ -86,11 +88,14 @@
 
         
         function change() {
-            let name = guidGenerator(2);
-            while (name in drawBorder) { name = guidGenerator(1); }
-            drawBorder(name, 200, 200, 160, 100);
-            fileBorders[name] = [200, 200, 160, 100]
-            console.log(fileBorders);
+            let name = guidGenerator(1, fileBorders, 0);
+            if (name != "") {
+                drawBorder(name, 200, 200, 160, 100);
+                fileBorders[name] = [200, 200, 160, 100]
+                console.log(fileBorders);
+            } else {
+                console.log("Error create uniq name!");
+            }
         }
                    
     </script>
