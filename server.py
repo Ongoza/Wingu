@@ -49,6 +49,11 @@ async def filesList(request):
     data = {'files':{'39.avi':[0.4,'20.10.2020'], 'new':{'45.avi':[0.4,'20.10.2020']}}};
     return  web.json_response(data)
 
+async def addToQueue(request):
+    msg_json = json.loads('data from post')
+
+    return  web.json_response({'answer':['addToQueue','ok',request]})
+
 async def getFileImg(request):
     try:
         print("start getFileImag")
@@ -109,6 +114,7 @@ routes = [
     ('GET',  '/camerasList', camerasList),
     ('GET',  '/getFileImg', getFileImg),
     ('GET',  '/filesList', filesList),
+    ('POST',  '/addToQueue', addToQueue),
 ]
 
 async def on_shutdown(app):

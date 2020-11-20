@@ -30,13 +30,30 @@
     <script src="js/nav.js"></script>
     <script src="js/websocket.js"></script>
     <script src="js/drawBorders.js"></script>
+    <style>
+        input:invalid {
+            border: 2px dashed red;
+        }
 
+        input:valid {
+            border: 2px solid black;
+        }
+    </style>
     <script>
         var fileCurVideoFilePath = 'video/39.avi';
         // json data structure:  name, size in GB, creaction time
         var fileList = {};
         var fileBordersList = {};
         var fileImgs = {};
+
+        function validedName() {
+            let input = $('#new_border_name');
+            let c = input.selectionStart, r = /[^a-zA-Z0-9_]/gi, v = input.val();
+            if (r.test(v)) {
+                input.val(v.replace(r, ''));
+                c--;
+            }
+        }
 
         function showImgBorders() {
             console.log(!(fileCurVideoFilePath in fileImgs), fileImgs);
@@ -45,7 +62,7 @@
                 drawBorders = fileBordersList[fileCurVideoFilePath];
                 for (var key in drawBorders) {
                     console.log(drawBorders[key]);
-                    addNewBorder(key, drawBorders[key]);
+                    drawNewBorder(key, drawBorders[key]);
                 }
                 console.log(drawBorders);
             }
@@ -89,7 +106,9 @@
 
         function fileSaveBorders() {
             fileBordersList[fileCurVideoFilePath] = drawBorders;
-            console.log('fileSaveBorders', drawActiveBorder,fileBordersList);
+            console.log('fileSaveBorders', drawActiveBorder, fileBordersList);
+            $("#file_borders_number").val(Object.keys(drawBorders).length);
+
         }
 
         function fileCancelBorders() {
@@ -100,6 +119,14 @@
             $('#fileSvg').empty();
             $('#displayLineName').html('&nbsp;');
             $('#dtVerticalScroll tbody').empty();
+        }
+
+        function addToQueue() {
+            if (parseInt($("#file_borders_number").val()) > 0) {
+                console.log("add to queue");
+            } else {
+                alert("Please add some borders!!!!");
+            }
         }
 
         $(document).ready(function () {
@@ -114,7 +141,7 @@
 <body>
     <div id="menu"></div>
     <h1 id="headMain"></h1>
-    
+
     <div class="container">
         <div class="card">
             <div class="card-body">
@@ -172,7 +199,7 @@
         </div>
         <br>
         <div>
-            
+
             <div class="card  mb-14">
                 <div class="row justify-content-md-center">
                     <div class="col-md-4" style="display:flex;justify-content:center;align-items:center;max-width:300px;min-height:220px; margin:auto;border:3px solid #00ffff;">
@@ -224,104 +251,123 @@
 
                                 <div class="input-group mb-auto">
                                     <div class="input-group-prepend"><span class="input-group-text">Borders:</span></div>
-                                    <input type="text" id="file_borders" class="form-control" value="0" readonly />
+                                    <input type="text" id="file_borders_number" class="form-control" value="0" readonly />
 
                                     <div class="input-group-append">
                                         <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="showImgBorders();">Edit</button>
                                     </div>
                                 </div>
 
-                                <button type="button" class="btn btn-primary" data-dismiss="modal">Add to queue</button>
+                                <button type="button" class="btn btn-primary" data-dismiss="modal" onclick="addToQueue();">Add to queue</button>
                             </form>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+    <br><br><br>
+    <!-- Modal select file-->
+    <div class="modal fade" id="fileModalName" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ModalDelete">Are you want delete camera config?</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
+                    <button type="button" class="btn btn-danger" onclick="delCamera(); return false;">Delete</button>
                 </div>
             </div>
         </div>
-
-     </div>
-    <br><br><br>
-    <!-- Modal select file-->
-            <div class="modal fade" id="fileModalName" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="ModalDelete">Are you want delete camera config?</h5>
-                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                        </div>
-                        <div class="modal-body">
-
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
-                            <button type="button" class="btn btn-danger" onclick="delCamera(); return false;">Delete</button>
-                        </div>
-                    </div>
+    </div>
+    <!-- Modal draw borders-->
+    <div class="modal fade" id="fileModalImg" tabindex="-1" role="dialog" aria-labelledby="ModalDrawBorders" aria-hidden="true">
+        <div class="modal-dialog" style="max-width: 1200px!important;" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="fileModalImg">Draw borders</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="fileCancelBorders(); return false;">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
-            </div>
-            <!-- Modal draw borders-->
-            <div class="modal fade" id="fileModalImg" tabindex="-1" role="dialog" aria-labelledby="ModalDrawBorders" aria-hidden="true">
-                <div class="modal-dialog"  style="max-width: 1200px!important;" role="document">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="fileModalImg">Draw borders</h5>
-                            <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="fileCancelBorders(); return false;">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="container-fluid">
-                                <div class="row">
-                                    <div id="fileModalImgDiv" style="display:flex;width:644px; height:484px;margin:auto;border:2px solid #00ffff;background-image:url('');background-repeat:no-repeat;">
-                                        <svg id="fileSvg" style="border:1px solid black;z-index:9;" width="640" height="480" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg" onload="makeDraggable(evt)"></svg>
-                                    </div>
+                <div class="modal-body">
+                    <div class="container-fluid">
+                        <div class="row">
+                            <div id="fileModalImgDiv" style="display:flex;width:644px; height:484px;margin:auto;border:2px solid #00ffff;background-image:url('');background-repeat:no-repeat;">
+                                <svg id="fileSvg" style="border:1px solid black;z-index:9;" width="640" height="480" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg" onload="makeDraggable(evt)"></svg>
+                            </div>
 
-                                    <div class="col-sm-4">
-                                        <div style=" align-items:flex-start; border: 1px solid black; display: flex; justify-content: left; height: 480px; position: relative;">
-                                            <div id="content" style="width:100%;">
-                                                <div class="col-sm-auto card-title bg-secondary text-white" style="margin-right: 0px; ">Add a border to the video</div>
-                                                <section style="margin: 15px;">
-                                                    <button type="button" class="btn btn-primary" onclick="addNewBorder();"> Add new border</button><span style="color:red;">&nbsp;&nbsp;<b>Direction: <span style="color:green">green</span>->red</b></span>
-                                                    <div>
-                                                        <b>Current border name: </b>
-                                                        <div style=" display: inline-block; ">
-                                                            <span id="displayLineName" style="border: 1px solid black; width: 100px; display: inline-block; ">&nbsp;</span>
-                                                            <button type="button" class="btn btn-danger btn-sm" onclick="delActiveBorder();">Del</button>
-                                                        </div>
-                                                    </div>
-                                                    <div><h4>Borders list</h4></div>
-
-                                                    <div id="dtVerticalScroll_wrapper" class="dataTables_wrapper dt-bootstrap4">
-                                                        <div class="dataTables_scrollBody" style="position: relative; overflow: auto; max-height: 250px; width: 100%;">
-                                                            <table id="dtVerticalScroll" class="table table-striped table-bordered table-sm my-custom-scrollbar dataTable" cellspacing="0" width="100%" role="grid" aria-describedby="dtVerticalScroll_info" style="width: 100%;">
-                                                                <thead>
-                                                                    <tr role="row" style=" height: 0px;">
-                                                                        <th class="th-sm sorting_asc" aria-controls="dtVerticalScroll" rowspan="1" colspan="1" style="height: 0px; width: 75px; padding-top: 0px; padding-bottom: 0px; border-top-width: 0px; border-bottom-width: 0px;" aria-sort="ascending" aria-label="Name: activate to sort column descending">
-                                                                            <div class="dataTables_sizing" style="height: 0px; overflow: hidden;"> Name</div>
-                                                                        </th>
-                                                                    </tr>
-                                                                </thead>
-                                                                <tbody></tbody>
-                                                            </table>
-                                                        </div>
-                                                        <br>
-                                                        <div style="margin-top:15px;">
-                                                            <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="fileCancelBorders(); return false;">Close</button>
-                                                            <button type="button" class="btn btn-danger" onclick="fileSaveBorders(); return false;">Save</button>
-                                                        </div>
-                                                    </div>
-                                                </section>
+                            <div class="col-sm-4">
+                                <div style=" align-items:flex-start; border: 1px solid black; display: flex; justify-content: left; height: 480px; position: relative;">
+                                    <div id="content" style="width:100%;">
+                                        <div class="col-sm-auto card-title bg-secondary text-white" style="margin-right: 0px; ">Add a border to the video</div>
+                                        <section style="margin: 15px;">
+                                            <button type="button" class="btn btn-primary" onclick="$('#new_border_name').val('border_'+Object.keys(drawBorders).length);$('#borderModalName').modal('show'); return false;"> Add new border</button><span style="color:red;">&nbsp;&nbsp;<b>Direction: <span style="color:green">green</span>->red</b></span>
+                                            <div>
+                                                <b>Current border name: </b>
+                                                <div style=" display: inline-block; ">
+                                                    <span id="displayLineName" style="border: 1px solid black; width: 100px; display: inline-block; ">&nbsp;</span>
+                                                    <button type="button" class="btn btn-danger btn-sm" onclick="delActiveBorder();">Del</button>
+                                                </div>
                                             </div>
+                                            <div><h4>Borders list</h4></div>
 
-                                        </div>
-
+                                            <div id="dtVerticalScroll_wrapper" class="dataTables_wrapper dt-bootstrap4">
+                                                <div class="dataTables_scrollBody" style="position: relative; overflow: auto; max-height: 250px; width: 100%;">
+                                                    <table id="dtVerticalScroll" class="table table-striped table-bordered table-sm my-custom-scrollbar dataTable" cellspacing="0" width="100%" role="grid" aria-describedby="dtVerticalScroll_info" style="width: 100%;">
+                                                        <thead>
+                                                            <tr role="row" style=" height: 0px;">
+                                                                <th class="th-sm sorting_asc" aria-controls="dtVerticalScroll" rowspan="1" colspan="1" style="height: 0px; width: 75px; padding-top: 0px; padding-bottom: 0px; border-top-width: 0px; border-bottom-width: 0px;" aria-sort="ascending" aria-label="Name: activate to sort column descending">
+                                                                    <div class="dataTables_sizing" style="height: 0px; overflow: hidden;"> Name</div>
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody></tbody>
+                                                    </table>
+                                                </div>
+                                                <br>
+                                                <div style="margin-top:15px;">
+                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="fileCancelBorders(); return false;">Close</button>
+                                                    <button type="button" class="btn btn-danger" onclick="fileSaveBorders(); return false;">Save</button>
+                                                </div>
+                                            </div>
+                                        </section>
                                     </div>
+
                                 </div>
+
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+    <div class="modal fade" id="borderModalName" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ModalDelete">Please give a name for border</h5> 
+                    <span style="color:red">(only Latin signs!)</span>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+                <div class="modal-body">
+                    <input type="text" id="new_border_name" class="form-control" oninput="validedName();" required pattern="[A-Za-z0-9.-_]" value="" />
+                    <span class="invalid-feedback">Required</span>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
+                    <button type="button" class="btn btn-danger" onclick="addNewBorder($('#new_border_name').val()); return false;">Create border</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

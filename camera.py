@@ -40,9 +40,23 @@ class Camera(threading.Thread):
         threading.Thread.__init__(self)
         self.id = id
         self.log = log
+        self.url = ''
+        self.skipFrame = 4
+        self.cntFrame = 0
+        self.allFrames = 0
+        self.borders = []
+        self.tgtResolution = []
+        self.videoResResolution = []
+        self.videoResPath = ''
+        self.resultVideo = False
+        self.displayVideo = False
         self._stopevent = threading.Event()
         self.killed = False
     
+    def startVideo(self):
+        print('start video: ', self.url)
+
+
     def kill(self):
         self.log.debug("kill camera")
         self._stopevent.set()
@@ -53,8 +67,7 @@ class Camera(threading.Thread):
         while not self._stopevent.isSet():
             # self.log.debug("hop")
             time.sleep(1)
-    
-    
+
 
 if __name__ == "__main__":
     log = logging.getLogger('app')

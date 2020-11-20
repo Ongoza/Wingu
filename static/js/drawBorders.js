@@ -1,7 +1,7 @@
-//<line class="static" id="0_line" x1="200" y1="200" x2="100" y2="100" stroke-width="2" stroke="#00ff21" / >
-//<line class="static" id="0_line_back" x1="200" y1="204" x2="100" y2="104" stroke-width="2" stroke="#ff0021" / >
-//<circle class="draggable" id="0_line_start" cx="200" cy="200" r="5" stroke="blue" stroke-width="1" fill="#00ff21" / >
-//<circle class="draggable" id="0_line_end" cx="100" cy="100" r="5" stroke="blue" stroke-width="1" fill="#ff0021" / >
+// TODO
+// add move each new border a liitle right from prev
+// add possibility save and load borders templates
+
 
 var drawBorders = {};
 var drawActiveBorder = null;
@@ -17,6 +17,7 @@ style.type = 'text/css';
 if (style.styleSheet) {style.styleSheet.cssText = css;
 } else { style.appendChild(document.createTextNode(css));
 }
+
 
 function guidGenerator(len, list, cnt) {
     let res = '';
@@ -86,34 +87,57 @@ function setActiveBorder(id) {
 
 function drawBorder(id, xy) {
     //xy = x1, y1, x2, y2
+    console.log(xy);
     let svg = $("#fileSvg")[0];
-    let len = Math.floor(Math.sqrt(Math.pow(xy[2] - xy[0], 2) + Math.pow(xy[1] - xy[3], 2)));
-    var angleDeg = Math.floor(Math.atan2(xy[3] - xy[1], xy[2] - xy[0]) * 180 / Math.PI) - 90;
-    drawNewRectSvg(svg, id.toString() + '_line_back', xy[0], xy[1], 6, len, angleDeg.toString(), "#ff0021");
-    drawNewLineSvg(svg, id.toString() + '_line', xy[0], xy[1], xy[2], xy[3], "#00ff21");
+    let len = Math.floor(Math.sqrt(Math.pow(xy[1][0] - xy[0][0], 2) + Math.pow(xy[0][1] - xy[1][1], 2)));
+    //let len = Math.floor(Math.sqrt(Math.pow(xy[2] - xy[0], 2) + Math.pow(xy[1] - xy[3], 2)));
+    var angleDeg = Math.floor(Math.atan2(xy[1][1] - xy[0][1], xy[1][0] - xy[0][0]) * 180 / Math.PI) - 90;
+    drawNewRectSvg(svg, id.toString() + '_line_back', xy[0][0], xy[0][1], 6, len, angleDeg.toString(), "#ff0021");
+    drawNewLineSvg(svg, id.toString() + '_line', xy[0][0], xy[0][1], xy[1][0], xy[1][1], "#00ff21");
     //drawNewLineSvg(svg, id.toString() + '_line_back', x1 - dist[1], y1 + dist[0], x2 - dist[1], y2 + dist[0], "#ff0021");
-    drawNewCircleSvg(svg, id.toString() + "_line_start", xy[0], xy[1], "#00ff21");
-    drawNewCircleSvg(svg, id.toString() + "_line_end", xy[2], xy[3], "#ff0021");
+    drawNewCircleSvg(svg, id.toString() + "_line_start", xy[0][0], xy[0][1], "#00ff21");
+    drawNewCircleSvg(svg, id.toString() + "_line_end", xy[1][0], xy[1][1], "#ff0021");
 }
 
+//function drawBorderLine(a, b){
+//    let length = 40;
+//    let vX0 = b[0] - a[0];
+//    let vY0 = b[1] - a[1];
+//    let mag = math.sqrt(vX0 * vX0 + vY0 * vY0);
+//    let vX = vX0 / mag;
+//    let vY = vY0 / mag;
+//    let temp = vX;
+//    vX = -vY;
+//    vY = temp;
+//    let z0 = (int(a[0] + vX0 / 2), int(a[1] + vY0 / 2));
+//    z1 = (int(a[0] + vX0 / 2 - vX * length), int(a[1] + vY0 / 2 - vY * length));
+//}
 
-function addNewBorder(name, data) {
-    console.log(name);
-    if (!name) {
-        name = guidGenerator(1, drawBorders, 0);
-        data = [200, 200, 160, 100];
-    }
-    if (name != "") {
-        drawBorder(name, data);
-        drawBorders[name] = data;
-        console.log(drawBorders);
-        $('#dtVerticalScroll tbody').append('<tr style="cursor:pointer;" id="' + name + '_line_sel" onclick="setActiveBorder(this.id)"><td>' + name + '</td></tr>');
-        setActiveBorder(name + "_line");
+function drawNewBorder(name, data) {
+    drawBorder(name, data);
+    drawBorders[name] = data;
+    console.log(drawBorders);
+    $('#dtVerticalScroll tbody').append('<tr style="cursor:pointer;" id="' + name + '_line_sel" onclick="setActiveBorder(this.id)"><td>' + name + '</td></tr>');
+    setActiveBorder(name + "_line");
+}
+
+function addNewBorder(name) {
+    if (name) {
+        console.log("name", name, drawBorders);
+        if (name in drawBorders) {
+            alert("Name already exist!!");
+        } else {
+            console.log("name=", name);
+            data = [[200, 200], [160, 100]];
+            drawNewBorder(name, data);
+            $('#borderModalName').modal('hide');
+        }
     } else {
-        console.log("Error create uniq name!");
+        alert("Please give a border name!!");
     }
-
+    
 }
+
 
 function delActiveBorder() {
     if (drawActiveBorder) {
@@ -218,7 +242,7 @@ function makeDraggable(evt) {
             let x2 = parseInt(LongLine.getAttribute('x2'));
             let y2 = parseInt(LongLine.getAttribute('y2'));
             let id = LongLine.id.substring(0, LongLine.id.indexOf('_line'));
-            drawBorders[id] = [x1, y1, x2, y2];
+            drawBorders[id] = [[x1, y1], [x2, y2]];
             console.log(drawBorders);
             selectedElement = false;
             LongLine = null;
