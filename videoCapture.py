@@ -19,7 +19,10 @@ from deep_sort.tracker import Tracker
 class VideoCapture:
     def __init__(self, id, url, borders, config):
         self.cap = cv2.VideoCapture(url)
+        self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        #self.totalFrames = 19
         self.id = id
+        self.lastFrame = 100
         self.save_video_res = None
         self.frame_res = (config['img_size'],config['img_size'])
         self.skip_frames = config['skip_frames']
@@ -39,24 +42,29 @@ class VideoCapture:
         self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", config['max_cosine_distance'], config['nn_budget']))
         self.cur_frame = 0
         self.cnt_people_in = {}
-        self.skip_cnt = 0   # add later skp counter
         self.q = queue.Queue()
         self._stopevent = threading.Event()
         t = threading.Thread(target=self._reader)
         t.daemon = True
         t.start()
+
     # read frames as soon as they are available, keeping only most recent one
     def _reader(self):
         while not self._stopevent.isSet():
-            if(self.cap):
-                ret, frame = self.cap.read()
-                if (ret):
-                    frame = cv2.resize(frame, self.frame_res)
-                    if (not self.q.empty()):
-                        try: self.q.get_nowait()   # discard previous (unprocessed) frame
-                        except queue.Empty: pass
-                    self.q.put(frame)
-                    self.cur_frame += 1
+            if self.cur_frame >= self.totalFrames:
+               self.exit()
+            else:
+                if(self.cap):
+                    ret, frame = self.cap.read()
+                    if (ret):
+                        frame = cv2.resize(frame, self.frame_res)
+                        if (not self.q.empty()):
+                            try: self.q.get_nowait()   # discard previous (unprocessed) frame
+                            except queue.Empty: pass
+                        self.q.put(frame)
+                self.cur_frame += 1
+                
+
     def read(self):
         return self.q.get()
 
@@ -161,7 +169,59 @@ class VideoCapture:
 
     def exit(self):
         self._stopevent.set()
-        cv2.destroyAllWindows()
-        if self.save_video_flag: self.out.release()
-        if(self.cap):
-            if(self.cap.isOpened()): self.cap.release()
+        self.isRun = False
+        try:
+            if self.save_video_flag: self.out.release()
+            if(self.cap):
+                if(self.cap.isOpened()): self.cap.release()
+        except:
+            print("Unexpected error:", sys.exc_info()[0])
+            raise 
+        print("videoCapture exit done")
+
+if __name__ == "__main__":
+    defaultConfig = {
+        'model_name': "yolov3-tiny", 
+        'model_def': "models/yolov3-tiny.cfg",
+        'weights_path':  "models/yolov3-tiny.weights",
+        'model_filename': 'models/mars-small128.pb',
+        'save_video_flag': False,
+        'display_video_flag': True,
+        'skip_frames': 4,
+        'conf_thres': 0.5, 
+        'nms_thres': 0.4, 
+        'img_size': 416, 
+        'body_res':(256, 128), 
+        'body_min_w': 64,
+        'threshold': 0.5, 
+        'nms_max_overlap': 0.9, 
+        'max_cosine_distance': 0.2,
+        'batch_size':1,
+        'img_size_start': (1600,1200),
+        'path_track': 20,
+        'save_video_res':(720, 540),
+        'nn_budget':None,
+        'frame_scale':3.84615384615, # 1600/416
+        }
+    frame_scale = defaultConfig['frame_scale']
+    borders = {'border1':[[int(0/frame_scale), int(400/frame_scale)], [int(1200/frame_scale), int(400/frame_scale)]]}
+    print("start")
+    stream = []
+    stream.append(VideoCapture("id", "video/39.avi", borders, defaultConfig))
+    while True:
+        print("stream", stream[0].cur_frame, stream[0].totalFrames)
+        if stream[0]._stopevent.isSet(): 
+            print("stop ddd")
+            break 
+        else: 
+            frame = stream[0].read()
+            cv2.imshow("preview", frame)
+            key = cv2.waitKey(10)
+            if key & 0xFF == ord('q'): break
+    print("stop 10")
+    stream[0].exit()
+    print("stop 11")
+    cv2.destroyAllWindows()
+    print("stop 12")
+    cv2.waitKey(1)
+    print("stop 13")
