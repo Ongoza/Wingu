@@ -23,10 +23,12 @@ import os
 import settings
 import server_data
 import hashlib
-import camera
 import ssl
 from views.websocket import WebSocket
 import logging
+
+import camera
+import gpuManager
 
 log = logging.getLogger('app')
 log.setLevel(logging.DEBUG)
@@ -128,8 +130,6 @@ async def on_shutdown(app):
 #    authorize,
 #]
 
-
-
 #app = web.Application(middlewares=middle)
 app = web.Application()
 
@@ -146,6 +146,14 @@ async def background_process():
     while True:
         log.debug('Run background task each 1 min')
         print("len websocketscmd:", str(len(app['websocketscmd'])))
+        try:
+            if app['manager']:
+                if any(app['manager'].gpusActiveList):
+                    print("cnt=", app['manager'].gpusActiveList['test'].cnt)
+                    #app['manager'].camActiveObjList['test'].cnt = 20
+
+        except:
+            print('Errror')
         if len(app['websocketscmd'])>0:
             print("start send back")
             try:
@@ -156,7 +164,7 @@ async def background_process():
                 raise
         else:
             print("len=0")
-        await asyncio.sleep(60)
+        await asyncio.sleep(6)
 async def start_background_tasks(app):
     app['dispatch'] = asyncio.create_task(background_process())
 async def cleanup_background_tasks(app):
@@ -205,15 +213,17 @@ try_make_db()
 
 app.on_cleanup.append(on_shutdown)
 app['websocketscmd'] = set()
-
-#  start Camera Object
-cam = camera.Camera("testCamera", log)
-cam.start()
+# app['manager'] = set()
+#  start cameras manager Object
+app['manager'] = gpuManager.Manager(log)
+#manager.daemon = True
+app['manager'].startGpuStream("test")
+print('manager=', app['manager'].camActiveObjList)
 # time.sleep(10)
 
 # log.info('The server running...')
 web.run_app(app)
-#  Stop cameta Object
-cam.kill()
-cam.join()
+#  Stop cameras manager Object
+app['manager'].kill()
+#manger.join()
 log.info('The server stopped!')
