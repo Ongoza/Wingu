@@ -2,13 +2,14 @@ from aiohttp import web
 from aiohttp.web import middleware
 from aiohttp_session import get_session
 
-import server_data
+#import server_data
 import settings
+session_list = []
 
 def checkAuth(user, hash):
     result = False
-    print("checkAuth", user, hash, server_data.session_list)
-    if hash in server_data.session_list:
+    print("checkAuth", user, hash, session_list)
+    if hash in session_list:
         result = True
     return result
 

@@ -8,6 +8,7 @@ import math
 
 import numpy as np
 import cv2
+import gpusManager
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 from deep_sort import nn_matching
@@ -17,29 +18,33 @@ from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 
 class VideoCapture:
-    def __init__(self, id, url, borders, config):
-        self.cap = cv2.VideoCapture(url)
-        self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    def __init__(self, camConfig, gpuConfig):        
         #self.totalFrames = 19
-        self.id = id
+        self.id = camConfig['id']
+        self.url = camConfig['url']
+        self.cap = cv2.VideoCapture(self.url)
+
+        self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.lastFrame = 100
+        self.config = gpuConfig
         self.save_video_res = None
-        self.frame_res = (config['img_size'],config['img_size'])
-        self.skip_frames = config['skip_frames']
+        self.frame_res = (gpuConfig['img_size'],gpuConfig['img_size'])
+        self.skip_frames = gpuConfig['skip_frames']
         self.isDrow = False
-        self.path_track = config['path_track']
-        self.save_video_flag = config['save_video_flag']
-        self.display_video_flag = config['display_video_flag']
-        if(config['save_video_flag'] or config['display_video_flag']):
+        self.outFrame = np.array([])
+        self.path_track = gpuConfig['path_track']
+        self.save_video_flag = gpuConfig['save_video_flag']
+        self.display_video_flag = gpuConfig['display_video_flag']
+        if(gpuConfig['save_video_flag'] or gpuConfig['display_video_flag']):
             self.isDrow = True
-        self.borders = borders
+            self.save_video_res = tuple(camConfig['save_video_res'])
+        self.borders = camConfig['borders']
         self.out = None
-        if self.save_video_flag:
-            self.save_video_res = config['save_video_res']
+        if self.save_video_flag:            
             outFile = self.url + '_res.avi'
             print("Save out video to file " + outFile)
-            self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 10, self.config['save_video_res'])
-        self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", config['max_cosine_distance'], config['nn_budget']))
+            self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
+        self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", gpuConfig['max_cosine_distance'], gpuConfig['nn_budget']))
         self.cur_frame = 0
         self.cnt_people_in = {}
         self.q = queue.Queue()
@@ -101,6 +106,7 @@ class VideoCapture:
             cv2.line(frame, (a[0],a[1]), (b[0],b[1]), (255, 255, 0), 2)
             cv2.arrowedLine(frame, z0, z1, (0, 255, 0), 2)
             cv2.putText(frame, "Out", z1, 0, 1, (0, 255, 0), 1)
+        return frame
 
     def track(self, detections, frame):
         self.tracker.predict()
@@ -127,6 +133,7 @@ class VideoCapture:
                         track.calculated = "in_" + str(len(self.cnt_people_in)) + "_"
                         track.color = (52, 235, 240)
                         self.add_intersectio_event(lst_intrsc, track.track_id)
+                        print("inresection", track.track_id)
                         #else: # 
                         #    cnt_people_out[track.track_id] = 0
                         #    track.calculated = "out_" + str(len(cnt_people_out)) + "_"
@@ -151,21 +158,25 @@ class VideoCapture:
                 cv2.rectangle(frame, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
                 # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
                 cv2.putText(frame, track_name, x1y1, 0, 0.4, clr, 1)
-            if(self.display_video_flag):
+            if(self.save_video_flag):
                 self.drawBorderLines(frame)
                 #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
                 cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
+                frame = cv2.resize(frame,self.save_video_res)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                self.out.write(frame)
+            if(self.display_video_flag):
+                if(not self.save_video_flag):
+                    frame = self.drawBorderLines(frame)
+                    #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
+                    cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
+                    print(self.save_video_res)
+                    frame = cv2.resize(frame, self.save_video_res)
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                self.outFrame = frame
                 #cv2.putText(frame, " out: "+str(len(cnt_people_out)), (43, 376), 0, 0.4, (0, 255, 0), 1)
                 # print("end frame")
                 #cv2.imshow("preview", frame)
-            if(self.save_video_flag):
-                if(not self.display_video_flag):
-                    self.drawBorderLines(frame)
-                    #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
-                    cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
-                frame = cv2.resize(frame,self.save_video_res)
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                out.write(frame)
 
     def exit(self):
         self._stopevent.set()
@@ -180,34 +191,9 @@ class VideoCapture:
         print("videoCapture exit done")
 
 if __name__ == "__main__":
-    defaultConfig = {
-        'model_name': "yolov3-tiny", 
-        'model_def': "models/yolov3-tiny.cfg",
-        'weights_path':  "models/yolov3-tiny.weights",
-        'model_filename': 'models/mars-small128.pb',
-        'save_video_flag': False,
-        'display_video_flag': True,
-        'skip_frames': 4,
-        'conf_thres': 0.5, 
-        'nms_thres': 0.4, 
-        'img_size': 416, 
-        'body_res':(256, 128), 
-        'body_min_w': 64,
-        'threshold': 0.5, 
-        'nms_max_overlap': 0.9, 
-        'max_cosine_distance': 0.2,
-        'batch_size':1,
-        'img_size_start': (1600,1200),
-        'path_track': 20,
-        'save_video_res':(720, 540),
-        'nn_budget':None,
-        'frame_scale':3.84615384615, # 1600/416
-        }
-    frame_scale = defaultConfig['frame_scale']
-    borders = {'border1':[[int(0/frame_scale), int(400/frame_scale)], [int(1200/frame_scale), int(400/frame_scale)]]}
     print("start")
     stream = []
-    stream.append(VideoCapture("id", "video/39.avi", borders, defaultConfig))
+    stream.append(VideoCapture("id", "video/39.avi", gpusManager.defaultBorders, gpusManager.defaultConfig))
     while True:
         print("stream", stream[0].cur_frame, stream[0].totalFrames)
         if stream[0]._stopevent.isSet(): 
@@ -215,7 +201,7 @@ if __name__ == "__main__":
             break 
         else: 
             frame = stream[0].read()
-            cv2.imshow("preview", frame)
+            #cv2.imshow("preview", frame)
             key = cv2.waitKey(10)
             if key & 0xFF == ord('q'): break
     print("stop 10")

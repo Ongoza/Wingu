@@ -26,7 +26,7 @@ import videoCapture
 # from server import log
 
 class GpuDevice(threading.Thread):
-    def __init__(self, id, device, log, config):        
+    def __init__(self, id, device, config, log):        
         self.id = id
         self.log = log
         self.frame = []
@@ -34,11 +34,9 @@ class GpuDevice(threading.Thread):
         self.config = config
         self.cnt = 0
         self.cams = []
-        self.borders = {}
         self.img_size = config['img_size']
         self.nms_max_overlap = config['nms_max_overlap']
         self.body_min_w = config['body_min_w']
-
         self.conf_thres = config['conf_thres'] 
         self.nms_thres = config['nms_thres']
         self.max_hum_w = int(self.img_size/2)
@@ -51,17 +49,17 @@ class GpuDevice(threading.Thread):
         #t = threading.Thread(target=self._reader)
         #t.daemon = True
     
-    def startCam(self, id, url, borders):
-        print('start video: ', url)
+    def startCam(self, camConfig):
+        print('start video: ', camConfig['id'])
         #id, url, borders, skipFrames, max_cosine_distance, nn_budget
-        cam =  videoCapture.VideoCapture(id, url, borders, self.config)
+        cam =  videoCapture.VideoCapture(camConfig, self.config)
         self.cams.append(cam)
         print(self.cams[0].id)
         if(len(self.cams)==1):
             self.start()
 
-    def stopCam(self, id, url):
-        print('stop video: ', self.url)
+    def stopCam(self, id):
+        print('stop video: ', id)
         self.cams[0].exit()
         time.sleep(0.1)
         del self.cams[0]
@@ -128,7 +126,11 @@ class GpuDevice(threading.Thread):
                 detections = [detections[i] for i in indices]
                 for i, cam in enumerate(self.cams):
                     cam.track(detections, frames[i])
-                    pass
+                    #if (cam.display_video_flag):
+                        #print(type(cam.outFrame))
+                        #if cam.outFrame.any():
+                            #cv2.imshow("preview_"+str(i), cam.outFrame)
+                    #pass
                     
 
 if __name__ == "__main__":
@@ -139,42 +141,27 @@ if __name__ == "__main__":
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(f)
     log.addHandler(ch)
-    defaultConfig = {
-        'model_name': "yolov3-tiny", 
-        'model_def': "models/yolov3-tiny.cfg",
-        'weights_path':  "models/yolov3-tiny.weights",
-        'model_filename': 'models/mars-small128.pb',
-        'save_video_flag': False,
-        'display_video_flag': True,
-        'skip_frames': 4,
-        'conf_thres': 0.5, 
-        'nms_thres': 0.4, 
-        'img_size': 416, 
-        'body_res':(256, 128), 
-        'body_min_w': 64, 
-        'threshold': 0.5,
-        'nms_max_overlap': 0.9, 
-        'max_cosine_distance': 0.2,
-        'batch_size':1,
-        'img_size_start': (1600,1200),
-        'path_track': 20,
-        'save_video_res':(720, 540),
-        'nn_budget':None,
-        'frame_scale':3.84615384615, # 1600/416
-        }
-    frame_scale = defaultConfig['frame_scale']
-    borders = {'border1':[[int(0/frame_scale), int(400/frame_scale)], [int(1200/frame_scale), int(400/frame_scale)]]}
+    with open('config/GPU_default.yaml') as f:    
+        defaultConfig = yaml.load(f, Loader=yaml.FullLoader)
+    with open('config/Stream_default.yaml') as f:    
+        camConfig = yaml.load(f, Loader=yaml.FullLoader)
 
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        gpu = GpuDevice("test", device, log, defaultConfig)
-        gpu.startCam('test_1', "video/39.avi", borders)
+        gpu = GpuDevice("test", device, defaultConfig, log)
+        gpu.startCam(camConfig)
         time.sleep(10)
-        #while True:
-        #    key = cv2.waitKey(100)
-        #    if key & 0xFF == ord('q'):
-        #        print("key=",key)
-        #        break
+        while True:
+            #for i, cam in enumerate(gpu.cams):
+            #    if (cam.display_video_flag):
+            #        print(type(cam.outframe))
+            #        if cam.outframe.any():
+            #            cv2.imshow("preview_"+str(i), cam.outFrame)
+            
+            key = cv2.waitKey(100)
+            if key & 0xFF == ord('q'):
+                print("key=",key)
+                break
     except:
         print("Unexpected error:", sys.exc_info()[0])
         raise
@@ -185,6 +172,3 @@ if __name__ == "__main__":
     cv2.destroyAllWindows()
     print("stop app")
     
-
-
-

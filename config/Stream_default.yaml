@@ -1,0 +1,14 @@
+id: test00
+url: video/39.avi
+img_size_start:
+- 1600
+- 1200
+save_video_res:
+- 720
+- 540
+borders:
+  border1:
+  - - 0
+    - 104
+  - - 312
+    - 104
