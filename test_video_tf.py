@@ -148,7 +148,7 @@ if __name__ == "__main__":
                     #prob.append([score,cl])
         #print("boxs", boxs)
         # cv2.imwrite("video/frame.jpg", frame_sm)
-        features = encoder(frame, boxs)
+        features = encoder(frame_sm, boxs)
         #print(type(features[0]), type(boxs[0]))
         detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
         # for d in  detections: print("d=", d.__dict__)
