@@ -35,7 +35,7 @@ frame_scale = 3.84615384615 # 1600/416
 
 border_lines = {'border1':[[int(0/frame_scale), int(400/frame_scale)], [int(1200/frame_scale), int(400/frame_scale)]]}
 # save or don't the output video to the disk
-writeVideo_flag = False
+writeVideo_flag = True
 root_dir = os.getcwd()
 # detector section
 # model_def = "utils/yolov3.cfg"
@@ -156,8 +156,10 @@ if __name__ == "__main__":
         counter += 1
         # frame = cv2.resize(frame, show_fh_fw)
         # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame = cv2.copyMakeBorder( frame, 0, 400, 0, 0, cv2.BORDER_CONSTANT)
+        # frame = cv2.copyMakeBorder( frame, 0, 400, 0, 0, cv2.BORDER_CONSTANT)
         frame = cv2.resize(frame,(img_size, img_size))
+        #frame_src = frame[150:250, 0:416]
+        #cv2.imwrite("video/cut.jpg", frame_src)
         # input picture to Tensor
         
         # frame_cuda = torch.from_numpy(frame).float().to(device) 
@@ -183,10 +185,12 @@ if __name__ == "__main__":
                     if((cls_pred == 0) and (wb < max_hum_w) and (wb > body_min_w)):
                             # boxs.append([int(y1*ratio_h_w[1]), int(x1*ratio_h_w[0]), int(y2*ratio_h_w[1]), int(x2*ratio_h_w[0])])
                             # boxs.append([int(y1), int(x1), int(y2), int(x2)])
-                            boxs.append([y1, x1, y2, x2])
-                            # print(conf, cls_conf)
+                            box =  np.array([x1.item(), y1.item(), x2.item(), y2.item()], dtype=np.int32)
+                            boxs.append(box)
+                            print("box",  box)
+                            # img = frame[sy:ey, sx:ex]
                             # confs.append(float(conf))
-                            # cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 1)
+                            # cv2.rectangle(frame, (int(x1.item()), int(y1.item())), (int(x2.item()), int(y2.item())), (255, 0, 0), 1)
                             # person_photo = frame[y1:y2, x1:x2]
         # print("box=",boxs)
         # frame_tf = tf.convert_to_tensor(frame, dtype=tf.float32)
@@ -204,7 +208,7 @@ if __name__ == "__main__":
             scores = np.array([d.confidence for d in detections])
             indices = preprocessing.non_max_suppression(boxes, nms_max_overlap, scores)
             detections = [detections[i] for i in indices]
-            # print(detections)
+            for d in  detections: print("d=", d.__dict__)
             tracker.predict()
             tracker.update(detections)
             for track in tracker.tracks:
@@ -245,6 +249,7 @@ if __name__ == "__main__":
                     track.xy = np.append(track.xy, [x1y1], axis=0)
                     track.xy = track.xy[-path_track:]
                     # cv2.arrowedLine(frame,(track.x1[0], track.y1[0]),(x1, y1),(0,255,0),4)
+                    print(track.xy)
                     cv2.polylines(frame, [track.xy], False, clr, 3)
                 else: track.xy = np.array([x1y1])
                 cv2.circle(frame, x1y1, 5, clr, -1)

@@ -103,7 +103,8 @@ class GpuDevice(threading.Thread):
                     frames.append(cam.read())
                     if (tr): cv2.imwrite("video/39_2.jpg", frames[0])            
             frame = frames[0]
-            frame_cuda = transforms.ToTensor()(frame).unsqueeze(0)
+            #frame_cuda = transforms.ToTensor()(frame).unsqueeze(0)
+            frame_cuda = transforms.ToTensor()(frame).to(self.device).unsqueeze(0)
             with torch.no_grad():    
                 obj_detec = self.detector(frame_cuda)
                 obj_detec = non_max_suppression(obj_detec, self.conf_thres, self.nms_thres)

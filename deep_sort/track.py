@@ -83,6 +83,7 @@ class Track:
         kf : kalman_filter.KalmanFilter The Kalman filter.
         detection : Detection The associated detection. """
         self.mean, self.covariance = kf.update(self.mean, self.covariance, detection.to_xyah())
+        self.x1y1 = detection.x1y1
         self.features.append(detection.feature)
         self.hits += 1
         self.time_since_update = 0

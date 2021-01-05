@@ -34,6 +34,7 @@ class Manager(threading.Thread):
         self.encodersList = {}
         self.detectorsList = {}
         self.gpusList['0'] = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print("GPU 0", self.gpusList['0'])
         # self.addModelsToGpu('0', self.gpusList['0'])        
         #self._stopevent = threading.Event()
         #self.killed = False
@@ -99,7 +100,7 @@ if __name__ == "__main__":
     log.addHandler(ch)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     manager = Manager(log)
-    with open('config/GPU_default.yaml') as f:    
+    with open('config/Gpu_default.yaml') as f:    
         defaultConfig = yaml.load(f, Loader=yaml.FullLoader)
     with open('config/Stream_default.yaml') as f:    
         camConfig = yaml.load(f, Loader=yaml.FullLoader)

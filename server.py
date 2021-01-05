@@ -215,7 +215,7 @@ app.on_cleanup.append(on_shutdown)
 app['websocketscmd'] = set()
 # app['manager'] = set()
 #  start cameras manager Object
-with open('config/GPU_default.yaml') as f:    
+with open('config/Gpu_default.yaml') as f:    
     defaultConfig = yaml.load(f, Loader=yaml.FullLoader)
 with open('config/Stream_default.yaml') as f:    
     camConfig = yaml.load(f, Loader=yaml.FullLoader)

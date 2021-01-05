@@ -123,6 +123,7 @@ class VideoCapture:
                 # detect direction
                 #track_line = LineString([track.xy[0], x1y1])
                 #if(track_line.intersection(border_line_str)):
+                # distance = cv2.pointPolygonTest(contour, (x,y), measure)
                 lst_intrsc = self.track_intersection_angle(track.xy[0], x1y1)
                 if(any(lst_intrsc)):
                     #border_line

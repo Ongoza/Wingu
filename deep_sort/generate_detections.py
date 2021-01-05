@@ -5,7 +5,6 @@ import numpy as np
 import cv2
 import tensorflow as tf
 
-
 def _run_in_batches(f, data_dict, out, batch_size):
     data_len = len(out)
     num_batches = int(data_len / batch_size)
@@ -41,28 +40,33 @@ def extract_image_patch(image, bbox, patch_shape):
         boundaries.
 
     """
-    bbox = np.array(bbox)
-    if patch_shape is not None:
+    #bbox = np.array(bbox)
+    # eee = 0
+    #rrr = 1
+    #if patch_shape is not None:
         # correct aspect ratio to patch shape
-        target_aspect = float(patch_shape[1]) / patch_shape[0]
-        new_width = target_aspect * bbox[3]
-        bbox[0] -= (new_width - bbox[2]) / 2
-        bbox[2] = new_width
+        #target_aspect = float(patch_shape[1]) / patch_shape[0]
+        #new_width = target_aspect * bbox[3]
+        #bbox[0] -= (new_width - bbox[2]) / 2
+        #bbox[2] = new_width
 
     # convert to top left, bottom right
-    bbox[2:] += bbox[:2]
+    # bbox[2:] += bbox[:2]
     bbox = bbox.astype(np.int)
 
     # clip at image boundaries
-    bbox[:2] = np.maximum(0, bbox[:2])
-    bbox[2:] = np.minimum(np.asarray(image.shape[:2][::-1]) - 1, bbox[2:])
+    #bbox[:2] = np.maximum(0, bbox[:2])
+    #bbox[2:] = np.minimum(np.asarray(image.shape[:2][::-1]) - 1, bbox[2:])
     if np.any(bbox[:2] >= bbox[2:]):
+        print("errr!!!!!! encode img size")
         return None
-    sx, sy, ex, ey = bbox
-    image = image[sy:ey, sx:ex]
-
-    image = cv2.resize(image, tuple(patch_shape[::-1]))
-    # image = cv2.resize(image, (64,128))
+    image = image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+    image = cv2.resize(image, (64,128))
+    # image = cv2.resize(image, tuple(patch_shape[::-1]))
+    # print("det",  tuple(patch_shape[::-1]))
+    cv2.imwrite("video/det.jpg", image)
+    # eee += 1
+    
     return image
 
 
