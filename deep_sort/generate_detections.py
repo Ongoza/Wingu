@@ -70,51 +70,15 @@ def extract_image_patch(image, bbox, patch_shape):
     return image
 
 
-class ImageEncoder(object):
-    
+class ImageEncoder(object):    
     def __init__(self, checkpoint_filename, input_name="images", output_name="features"):
-        # if os.path.isdir("logs"):
-        #     for filename in os.listdir("logs"):
-        #         file_path = os.path.join("logs", filename)
-        #         try:
-        #             if os.path.isfile(file_path) or os.path.islink(file_path):
-        #                 os.unlink(file_path)
-        #             elif os.path.isdir(file_path):
-        #                 os.remove(file_path)
-        #                 # shutil.rmtree(file_path)
-        #         except Exception as e: print('Failed to delete %s. Reason: %s' % (file_path, e))
-        # print("cleaned logs directory")
-        # tf.logging.info('Things are good!')
         self.d_graph = tf.Graph()
-        self.tbCallBack = tf.keras.callbacks.TensorBoard(log_dir='logs', histogram_freq=1)
         with self.d_graph.as_default():
             self.session = tf.compat.v1.Session()
             graph_def = tf.compat.v1.GraphDef()
             with tf.io.gfile.GFile(checkpoint_filename, "rb") as file_handle:
                 graph_def.ParseFromString(file_handle.read())
-                # print("graph_def", graph_def)
-                tf.import_graph_def(graph_def, name="net")
-            # tf.io.write_graph(graph_def, 'my-model', 'testMars.pbtxt')
-        # self.writer = tf.compat.v1.summary.FileWriter('logs', self.d_graph)
-        # summary = tf.compat.v1.Summary(value=[tf.compat.v1.Summary.Value(tag="Test_avg_train", simple_value=100)])
-        # self.writer.add_summary(summary, 1)
-        # print("net/%s:0" % input_name, "net/%s:0" % output_name)
-        # print("===============")
-        # writer = tf.compat.v1.summary.FileWriter("video/", self.d_graph)
-        # from keras.utils.visualize_util import plot
-        # tf.keras.utils.plot_model(self.d_graph, to_file='model.png')
-        # tf.io.write_graph(self.d_graph, 'video2', 'mars3.pbtxt')
-        
-        # model = tf.saved_model.load(export_dir,tags=None)
-        # print(model.summary())
-        # print(self.d_graph.get_operations())
-        # for op in self.d_graph.get_operations():
-        #     name = str(op.name)
-        #     print(name)
-        #     print(self.d_graph.get_tensor_by_name(name))
-        # print(tf.global_variables())
-        # print("!!!!start=",input_name,"=dd=",self.d_graph.get_tensor_by_name("net/%s:0" % input_name))
-        # print("!!!!start=",output_name,"=dd=",self.d_graph.get_tensor_by_name("net/%s:0" % output_name))
+            tf.import_graph_def(graph_def, name="net")
         self.input_var = self.d_graph.get_tensor_by_name("net/%s:0" % input_name)
         self.output_var = self.d_graph.get_tensor_by_name("net/%s:0" % output_name)
 
@@ -122,6 +86,7 @@ class ImageEncoder(object):
         assert len(self.input_var.get_shape()) == 4
         self.feature_dim = self.output_var.get_shape().as_list()[-1]
         self.image_shape = self.input_var.get_shape().as_list()[1:]
+        #model.save(output_weights_path)
 
     def __call__(self, data_x, batch_size=16):
         # print("call", data_x.shape)

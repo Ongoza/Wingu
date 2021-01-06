@@ -4,17 +4,14 @@ path_track: 20
 body_res:
 - 256
 - 128
-conf_thres: 0.5
 display_video_flag: false
 img_size: 416
 max_cosine_distance: 0.2
-model_def: models/yolov3-tiny.cfg
-model_filename: models/mars-small128.pb
-model_name: yolov3-tiny
-nms_max_overlap: 0.9
-nms_thres: 0.4
-nn_budget: null
+encoder_filename: models/mars-small128.pb
+detector_name: yolov4
+detector_filename: models/yolov4.h5
 save_video_flag: true
 skip_frames: 4
-threshold: 0.5
-weights_path: models/yolov3-tiny.weights
+yolo_max_boxes: 64
+yolo_iou_threshold: 0.5
+yolo_score_threshold: 0.5

@@ -73,22 +73,21 @@ class VideoCapture:
     def read(self):
         return self.q.get()
 
-    def ccw(self,A,B,C):
-        return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
-
-    # Return true if line segments AB and CD intersect
-    def track_intersection_angle(self A,B):   
+    def track_intersection_angle(self, xy0, xy1):
         res = []
         for key in self.borders:
-            C = np.array(self.borders[key][0])
-            D = np.array(self.borders[key][1])
-            if self.ccw(A, C, D) != self.ccw(B, C, D) and self.ccw(A, B, C) != self.ccw(A, B, D):            
-                v0 = np.array(B) - np.array(A)
-                v1 = np.array(D) - np.array(C)
-                angle = np.math.atan2(np.linalg.det([v0,v1]), np.dot(v0,v1))
+            s = np.vstack([xy0, xy1, self.borders[key][0], self.borders[key][1]])        # s for stacked
+            h = np.hstack((s, np.ones((4, 1)))) # h for homogeneous
+            l1 = np.cross(h[0], h[1])           # get first line
+            l2 = np.cross(h[2], h[3])           # get second line
+            x, y, z = np.cross(l1, l2)          # point of intersection
+            if z != 0:                          # lines are parallel
+                v0 = np.array(xy1) - np.array(xy0)
+                v1 = np.array(self.borders[key][1]) - np.array(self.borders[key][0])
+                angle = np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
                 if (angle > 0):
                     res.append(key)
-        return res
+            return res
 
     def add_intersectio_event(self, border_names, id):
         print(border_names, id)
@@ -116,39 +115,50 @@ class VideoCapture:
             if(not track.is_confirmed() or track.time_since_update > 1):
                 # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
                 continue 
-            xy = track.mean[:2].astype(np.int)# tuple(())
+            bbox = track.to_tlwh()
+            x1y1 = (int(bbox[1]+(bbox[3] - bbox[1])/2), int(bbox[0]+(bbox[2] - bbox[0])/2))
             clr = (255, 255, 0) # default color
             track_name = str(track.track_id) # default name
             if(hasattr(track, 'xy')):
-                lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
+                # detect direction
+                #track_line = LineString([track.xy[0], x1y1])
+                #if(track_line.intersection(border_line_str)):
+                # distance = cv2.pointPolygonTest(contour, (x,y), measure)
+                lst_intrsc = self.track_intersection_angle(track.xy[0], x1y1)
                 if(any(lst_intrsc)):
                     #border_line
                     # print("intersection!!", track_name)
                     if(not hasattr(track, 'calculated')):
+                        #if(border_line_a * (x1y1[1] - border_line[0][1]) -  border_line_b * (x1y1[0] - border_line[0][0])) > 0:
                         self.cnt_people_in[track.track_id] = 0
                         track.calculated = "in_" + str(len(self.cnt_people_in)) + "_"
                         track.color = (52, 235, 240)
                         self.add_intersectio_event(lst_intrsc, track.track_id)
-                        # print("inresection", track.track_id)
+                        print("inresection", track.track_id)
+                        #else: # 
+                        #    cnt_people_out[track.track_id] = 0
+                        #    track.calculated = "out_" + str(len(cnt_people_out)) + "_"
+                        #    track.color = (0, 255, 0)
                         track.cross_cnt = self.path_track
-                    clr = track.color                        
+                    clr = track.color
+                # else:
+                        
                 if(hasattr(track, 'calculated')):
                     clr = track.color
                     track_name = track.calculated  + track_name
                     track.cross_cnt -= 1
                     if(track.cross_cnt < 1): track.state = 3 # delete from track list
-                track.xy.append(xy)
-                if len(track.xy) > path_track:
-                    track.xy = track.xy[-path_track:]
+                track.xy = np.append(track.xy, [x1y1], axis=0)
+                track.xy = track.xy[-self.path_track:]
                 # cv2.arrowedLine(frame,(track.x1[0], track.y1[0]),(x1, y1),(0,255,0),4)
-                #if(self.isDrow):
-                #    cv2.polylines(frame, [track.xy], False, clr, 3)
-            else: track.xy = [xy]
+                if(self.isDrow):
+                    cv2.polylines(frame, [track.xy], False, clr, 3)
+            else: track.xy = np.array([x1y1])
             if(self.isDrow):
-                cv2.circle(frame, xy, 5, clr, -1)
-                # cv2.rectangle(frame, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
+                cv2.circle(frame, x1y1, 5, clr, -1)
+                cv2.rectangle(frame, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
                 # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
-                cv2.putText(frame, track_name, xy, 0, 0.4, clr, 1)
+                cv2.putText(frame, track_name, x1y1, 0, 0.4, clr, 1)
             if(self.save_video_flag):
                 self.drawBorderLines(frame)
                 #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)

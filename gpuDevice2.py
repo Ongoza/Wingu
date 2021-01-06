@@ -5,18 +5,22 @@ import logging
 import random
 import json
 import math
+
 import numpy as np
 import cv2
 import tensorflow as tf
-#os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
+import torch
+import torchvision.transforms as transforms
 
-from tf2_yolov4.anchors import YOLOV4_ANCHORS
-from tf2_yolov4.model import YOLOv4
+#os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 from deep_sort import nn_matching
 from deep_sort import preprocessing
 import deep_sort.generate_detections as gdet
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
+# from shapely.geometry import LineString, Point
+from models.models import Darknet
+from models.utils import non_max_suppression
 
 import videoCapture
 # from server import log
@@ -31,18 +35,14 @@ class GpuDevice(threading.Thread):
         self.cnt = 0
         self.cams = []
         self.img_size = config['img_size']
+        self.nms_max_overlap = config['nms_max_overlap']
         self.body_min_w = config['body_min_w']
+        self.conf_thres = config['conf_thres'] 
+        self.nms_thres = config['nms_thres']
         self.max_hum_w = int(self.img_size/2)
-        self.detector = YOLOv4(
-            input_shape=(config["img_size"], config["img_size"], 3), 
-            anchors=YOLOV4_ANCHORS, 
-            num_classes=80, 
-            training=False, 
-            yolo_max_boxes=config["yolo_max_boxes"], 
-            yolo_iou_threshold=config["yolo_iou_threshold"], 
-            yolo_score_threshold=config["yolo_score_threshold"]) 
-        self.detector.load_weights(self.config['detector_filename'])
-        self.encoder = gdet.create_box_encoder(self.config['encoder_filename'], batch_size=self.config['batch_size'])
+        self.detector = Darknet(self.config['model_def'], img_size=self.config['img_size']).to(self.device)
+        self.detector.load_darknet_weights(self.config['weights_path'])
+        self.encoder = gdet.create_box_encoder(self.config['model_filename'], batch_size=self.config['batch_size'])
         self._stopevent = threading.Event()
         print("created ok")
         threading.Thread.__init__(self)
@@ -66,6 +66,18 @@ class GpuDevice(threading.Thread):
         if(len(self.cams)==0):
             time.sleep(0.5)
             self.kill()
+    
+    #def drawBorderLine(self, a, b):
+    #    length = 40
+    #    vX0 = b[0] - a[0]; vY0 = b[1] - a[1]
+    #    mag = math.sqrt(vX0*vX0 + vY0*vY0)
+    #    vX = vX0 / mag; vY = vY0 / mag
+    #    temp = vX; vX = -vY; vY = temp
+    #    z0 = (int(a[0]+vX0/2), int(a[1]+vY0/2))
+    #    z1 = (int(a[0]+vX0/2 - vX * length), int(a[1] +vY0/2- vY * length))
+    #    cv2.line(frame, a, b, (255, 255, 0), 2)
+    #    cv2.arrowedLine(frame, z0, z1, (0, 255, 0), 2)
+    #    cv2.putText(frame, "Out", z1, 0, 1, (0, 255, 0), 1)
 
     def kill(self):
         self.log.debug("kill cameras "+ str(len(self.cams)))
@@ -91,26 +103,35 @@ class GpuDevice(threading.Thread):
                     frames.append(cam.read())
                     if (tr): cv2.imwrite("video/39_2.jpg", frames[0])            
             frame = frames[0]
-            print("frame rs = ", frame.shape)
-            # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            # convert numpy opencv to tensor
-            frame_tz = tf.convert_to_tensor(frame, dtype=tf.float32, dtype_hint=None, name=None)
-            frame_tz = tf.expand_dims(frame_tz, axis=0) / 255.0
-            boxes, scores, classes, valid_detections = detector.predict(frame_tz)            
-            #    obj_detec = non_max_suppression(obj_detec, self.conf_thres, self.nms_thres)
+            #frame_cuda = transforms.ToTensor()(frame).unsqueeze(0)
+            frame_cuda = transforms.ToTensor()(frame).to(self.device).unsqueeze(0)
+            with torch.no_grad():    
+                obj_detec = self.detector(frame_cuda)
+                obj_detec = non_max_suppression(obj_detec, self.conf_thres, self.nms_thres)
             boxs = []
             confs = []
-            for i in range(len(boxes[0])): 
-                if scores[0][i] > 0:
-                    if classes[0][i] == 0:
-                        boxs.append((np.array(boxes[0][i])*self.img_size))
-                        confs.append(score[0][i])
+            for item in obj_detec:
+                if item is not None:
+                    i = 0
+                    for x1, y1, x2, y2, conf, cls_conf, cls_pred in item: #classes[int(cls_pred)]
+                        wb = y2-y1
+                        if((cls_pred == 0) and (wb < self.max_hum_w) and (wb > self.body_min_w)):
+                                boxs.append([y1, x1, y2, x2])
             if(len(boxs)):
                 t_start2 = time.time()
                 features = self.encoder(frame, boxs)
-                detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
+                detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(boxs, features)]
+                boxes = np.array([d.tlwh for d in detections]) # w and h replace by x2 y2
+                scores = np.array([d.confidence for d in detections])
+                indices = preprocessing.non_max_suppression(boxes, self.nms_max_overlap, scores)
+                detections = [detections[i] for i in indices]
                 for i, cam in enumerate(self.cams):
                     cam.track(detections, frames[i])
+                    #if (cam.display_video_flag):
+                        #print(type(cam.outFrame))
+                        #if cam.outFrame.any():
+                            #cv2.imshow("preview_"+str(i), cam.outFrame)
+                    #pass
                     
 
 if __name__ == "__main__":
