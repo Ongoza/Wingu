@@ -1,5 +1,6 @@
 id: test00
 url: video/39.avi
+batch_size: 32
 img_size_start:
 - 1600
 - 1200

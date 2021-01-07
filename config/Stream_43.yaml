@@ -1,0 +1,27 @@
+id: test01
+url: video/43.avi
+isFromFile: true
+save_path: video/43_out.avi
+body_min_w: 64
+path_track: 20
+body_res:
+- 256
+- 128
+display_video_flag: true
+max_cosine_distance: 0.2
+save_video_flag: true
+skip_frames: 4
+encoder_filename: models/mars-small128.pb
+batch_size: 32
+img_size_start:
+- 1600
+- 1200
+save_video_res:
+- 720
+- 540
+borders:
+  border1:
+  - - 0
+    - 104
+  - - 312
+    - 104

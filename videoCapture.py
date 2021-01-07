@@ -5,7 +5,7 @@ import logging
 import random
 import json
 import math
-
+import yaml
 import numpy as np
 import cv2
 import gpusManager
@@ -18,66 +18,96 @@ from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 
 class VideoCapture:
-    def __init__(self, camConfig, gpuConfig):        
+    def __init__(self, camConfigFile, gpuConfig, log):        
+        print("start init stream object")
         #self.totalFrames = 19
-        self.id = camConfig['id']
-        self.url = camConfig['url']
-        self.cap = cv2.VideoCapture(self.url)
-
-        self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.lastFrame = 100
-        self.config = gpuConfig
-        self.save_video_res = None
-        self.frame_res = (gpuConfig['img_size'],gpuConfig['img_size'])
-        self.skip_frames = gpuConfig['skip_frames']
-        self.isDrow = False
-        self.outFrame = np.array([])
-        self.path_track = gpuConfig['path_track']
-        self.save_video_flag = gpuConfig['save_video_flag']
-        self.display_video_flag = gpuConfig['display_video_flag']
-        if(gpuConfig['save_video_flag'] or gpuConfig['display_video_flag']):
-            self.isDrow = True
-            self.save_video_res = tuple(camConfig['save_video_res'])
-        self.borders = camConfig['borders']
-        self.out = None
-        if self.save_video_flag:            
-            outFile = self.url + '_res.avi'
-            print("Save out video to file " + outFile)
-            self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
-        self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", gpuConfig['max_cosine_distance'], gpuConfig['nn_budget']))
-        self.cur_frame = 0
-        self.cnt_people_in = {}
-        self.q = queue.Queue()
-        self._stopevent = threading.Event()
-        t = threading.Thread(target=self._reader)
-        t.daemon = True
-        t.start()
+        try:
+            with open(camConfigFile) as f:    
+                self.config = yaml.load(f, Loader=yaml.FullLoader)
+            self.id = self.config['id']
+            self.url = self.config['url']
+            self.isFromFile = self.config['isFromFile']
+            self.log = log
+            self.log.debug("start init stream object")            
+            self.cap = cv2.VideoCapture(self.url)
+            self.img_size = gpuConfig['img_size']
+            self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            # self.lastFrame = 100
+            self.max_hum_w = int(self.img_size/4) 
+            self.GPUconfig = gpuConfig
+            self.save_video_res = None
+            self.frame_res = (self.img_size, self.img_size)
+            self.skip_frames = self.config['skip_frames']
+            self.batch_size = self.config['batch_size']
+            self.isDrow = False
+            self.outFrame = np.array([])
+            self.path_track = self.config['path_track']
+            self.save_video_flag = self.config['save_video_flag']
+            self.display_video_flag = self.config['display_video_flag']
+            if(self.config['save_video_flag'] or self.config['display_video_flag']):
+                self.isDrow = True
+                self.save_video_res = tuple(self.config['save_video_res'])
+            self.borders = self.config['borders']
+            self.out = None
+            if self.save_video_flag:            
+                outFile =  self.config['save_path']
+                self.log.debug("Save out video to file " + outFile)
+                self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
+            self.encoder = gdet.create_box_encoder(self.config['encoder_filename'], batch_size=self.batch_size)
+            self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", self.config['max_cosine_distance'], None))
+            self.cur_frame = 0
+            self.cnt_people_in = {}
+            if not self.isFromFile:
+                self.q = queue.Queue()
+                t = threading.Thread(target=self._reader)
+                t.daemon = True
+                t.start()
+            self._stopevent = threading.Event()
+            
+        except:
+            self.log.debug("Can not start Vidoe Stream for " + camConfigFile)            
+            # traceback.print_exception(*sys.exc_info()) 
+            print("VideoStream err:", sys.exc_info())
+            self.id = None
 
     # read frames as soon as they are available, keeping only most recent one
+    # 0. CV_CAP_PROP_POS_MSEC Current position of the video file in milliseconds.
+    # 1. CV_CAP_PROP_POS_FRAMES 0-based index of the frame to be decoded/captured next.
     def _reader(self):
         while not self._stopevent.isSet():
-            if self.cur_frame >= self.totalFrames:
-               self.exit()
-            else:
-                if(self.cap):
-                    ret, frame = self.cap.read()
-                    if (ret):
-                        frame = cv2.resize(frame, self.frame_res)
-                        if (not self.q.empty()):
-                            try: self.q.get_nowait()   # discard previous (unprocessed) frame
-                            except queue.Empty: pass
-                        self.q.put(frame)
+            if(self.cap):
+                ret, frame = self.cap.read()
+                if (ret):
+                    if (not self.q.empty()):
+                        try: self.q.get_nowait()   # discard previous (unprocessed) frame
+                        except queue.Empty: pass
+                    frame = cv2.resize(frame, self.frame_res)
+                    self.q.put(frame)
+                # else: print("skip frame", self.cur_frame)
                 self.cur_frame += 1
-                
 
     def read(self):
-        return self.q.get()
+        if self.isFromFile:
+            if self.cur_frame < self.totalFrames:
+                ret, frame = self.cap.read()
+                self.cur_frame += 1
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.cap.get(cv2.CAP_PROP_POS_FRAMES) + self.skip_frames)
+                if (ret):
+                   frame = cv2.resize(frame, self.frame_res)
+                else:
+                    #self.log.debug("Skip frame")
+                    frame = self.read()
+                return frame
+            else:
+                self.exit()
+        else:
+            return self.q.get()
 
     def ccw(self,A,B,C):
         return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
 
     # Return true if line segments AB and CD intersect
-    def track_intersection_angle(self A,B):   
+    def track_intersection_angle(self,A,B):   
         res = []
         for key in self.borders:
             C = np.array(self.borders[key][0])
@@ -91,7 +121,7 @@ class VideoCapture:
         return res
 
     def add_intersectio_event(self, border_names, id):
-        print(border_names, id)
+        self.log.debug(border_names, id)
 
     def drawBorderLines(self, frame):
         for b in self.borders:
@@ -109,65 +139,83 @@ class VideoCapture:
             cv2.putText(frame, "Out", z1, 0, 1, (0, 255, 0), 1)
         return frame
 
-    def track(self, detections, frame):
-        self.tracker.predict()
-        self.tracker.update(detections)
-        for track in self.tracker.tracks:
-            if(not track.is_confirmed() or track.time_since_update > 1):
-                # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
-                continue 
-            xy = track.mean[:2].astype(np.int)# tuple(())
-            clr = (255, 255, 0) # default color
-            track_name = str(track.track_id) # default name
-            if(hasattr(track, 'xy')):
-                lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
-                if(any(lst_intrsc)):
-                    #border_line
-                    # print("intersection!!", track_name)
-                    if(not hasattr(track, 'calculated')):
-                        self.cnt_people_in[track.track_id] = 0
-                        track.calculated = "in_" + str(len(self.cnt_people_in)) + "_"
-                        track.color = (52, 235, 240)
-                        self.add_intersectio_event(lst_intrsc, track.track_id)
-                        # print("inresection", track.track_id)
-                        track.cross_cnt = self.path_track
-                    clr = track.color                        
-                if(hasattr(track, 'calculated')):
-                    clr = track.color
-                    track_name = track.calculated  + track_name
-                    track.cross_cnt -= 1
-                    if(track.cross_cnt < 1): track.state = 3 # delete from track list
-                track.xy.append(xy)
-                if len(track.xy) > path_track:
-                    track.xy = track.xy[-path_track:]
-                # cv2.arrowedLine(frame,(track.x1[0], track.y1[0]),(x1, y1),(0,255,0),4)
-                #if(self.isDrow):
-                #    cv2.polylines(frame, [track.xy], False, clr, 3)
-            else: track.xy = [xy]
-            if(self.isDrow):
-                cv2.circle(frame, xy, 5, clr, -1)
-                # cv2.rectangle(frame, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
-                # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
-                cv2.putText(frame, track_name, xy, 0, 0.4, clr, 1)
-            if(self.save_video_flag):
-                self.drawBorderLines(frame)
-                #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
-                cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
-                frame = cv2.resize(frame,self.save_video_res)
+    def track(self, box, score, cl, frame):
+        self.log.debug("track "+ len(box) +" "+ len(score) +" "+ len(cl))
+        boxs = []
+        confs = []
+        for i in range(len(box)): 
+           if score[i] > 0:
+               if cl[i] == 0:
+                 boxs.append((np.array(box[i])*self.img_size))
+                 confs.append(score[i])
+        if(len(boxs)):
+            self.log.debug("track 2")
+            start = time.time()
+            features = self.encoder(frame, boxs)
+            detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
+            self.tracker.predict()
+            self.tracker.update(detections)
+            for track in self.tracker.tracks:
+                if(not track.is_confirmed() or track.time_since_update > 1):
+                    # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
+                    continue 
+                xy = track.mean[:2].astype(np.int)# tuple(())
+                clr = (255, 255, 0) # default color
+                track_name = str(track.track_id) # default name
+                self.log.debug("track "+ track_name)
+                if(hasattr(track, 'xy')):
+                    lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
+                    if(any(lst_intrsc)):
+                        #border_line
+                        if(not hasattr(track, 'calculated')):
+                            #cnt_people_in[track.track_id] = 0
+                            track.calculated = "in_"
+                            track.color = (52, 235, 240)
+                            self.log.debug("intersection!! "+ track_name +" "+ self.id)
+                            track.cross_cnt = self.path_track
+                    if(hasattr(track, 'calculated')):
+                        clr = track.color
+                        track_name = track.calculated  + track_name
+                        track.cross_cnt -= 1
+                        if(track.cross_cnt < 1): track.state = 3 # delete from track list
+                    track.xy.append(xy)
+                    if len(track.xy) > self.path_track:
+                        track.xy = track.xy[-self.path_track:]
+                    # print("[track.xy]", [track.xy])
+                    # cv2.polylines(frame_sm, [np.array(track.xy)], False, clr, 3)
+                else: 
+                    track.xy = [xy]
+                if(self.isDrow):    
+                    txy =  tuple(xy)
+                    cv2.circle(frame, txy, 5, clr, -1)
+                    #cv2.rectangle(frame_sm, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
+                    # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
+                    cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
+        self.log.debug("--" + str(self.display_video_flag))
+        if self.save_video_flag:
+            self.drawBorderLines(frame)
+            cv2.putText(frame, "FPS: "+str(round(1./(time.time() - start), 2))+" frame: "+str(self.cur_frame), (10, 340), 0, 0.4, (255, 255, 0), 1)
+            # cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
+            frame = cv2.resize(frame,self.save_video_res)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            self.out.write(frame)
+        if self.display_video_flag:
+            self.log.debug("save")
+            if(not self.save_video_flag):
+                frame = self.drawBorderLines(frame)
+                cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(self.cur_frame), (10, 340), 0, 0.4, (255, 255, 0), 1)
+                # cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
+                #print(self.save_video_res)
+                frame = cv2.resize(frame, self.save_video_res)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                self.out.write(frame)
-            if(self.display_video_flag):
-                if(not self.save_video_flag):
-                    frame = self.drawBorderLines(frame)
-                    #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
-                    cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
-                    print(self.save_video_res)
-                    frame = cv2.resize(frame, self.save_video_res)
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                self.outFrame = frame
-                #cv2.putText(frame, " out: "+str(len(cnt_people_out)), (43, 376), 0, 0.4, (0, 255, 0), 1)
-                # print("end frame")
-                #cv2.imshow("preview", frame)
+            # save current frame
+            ret2, iWeb = cv2.imencode("jpeg", frame)
+            if(ret2): self.outFrame = iWeb.tobytes()
+            else: self.log.error("Can't convert img")
+            # self.outFrame = np.copy(frame)
+            #cv2.putText(frame, " out: "+str(len(cnt_people_out)), (43, 376), 0, 0.4, (0, 255, 0), 1)
+            print("Frame saved")
+            #cv2.imshow("preview", frame)
 
     def exit(self):
         self._stopevent.set()

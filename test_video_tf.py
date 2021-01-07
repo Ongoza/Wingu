@@ -117,8 +117,7 @@ if __name__ == "__main__":
     start = time.time()
 
 # main loop
-    while True:
-        
+    while True:        
         r, frame = cap.read()
         if (not r):
             print("skip frame ", skip_counter)
@@ -140,7 +139,8 @@ if __name__ == "__main__":
         boxs = []
         confs = []
         for j in range(len(boxes)):
-            for i in range(len(boxes[j])): 
+            for i in range(len(boxes[j])):
+                # print("boxes[j]",type(boxes[j]),boxes[j])
                 if scores[j][i] > 0:
                     if classes[j][i] == 0:
                         boxs.append((np.array(boxes[j][i])*HEIGHT))
@@ -149,8 +149,10 @@ if __name__ == "__main__":
                     #prob.append([score,cl])
             #print("boxs", boxs)
             # cv2.imwrite("video/frame.jpg", frame_sm)
+            # boxs.append(np.zeros(4))
+            #print("boxes[j]",type(boxes),boxes)
             features = encoder(frame_sm, boxs)
-            #print(type(features[0]), type(boxs[0]))
+            print("features", features)
             detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
             # for d in  detections: print("d=", d.__dict__)
             tracker.predict()

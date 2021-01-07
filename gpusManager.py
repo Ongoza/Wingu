@@ -56,13 +56,13 @@ class Manager(threading.Thread):
         self.gpusActiveList[id].kill()
         del self.gpusActiveList[id]
 
-    def startStream(self, gpuId, streamConfig):
+    def startStream(self, gpuId, streamConfigFile):
         print(gpuId, self.streamsList, streamConfig)
         if gpuId in self.gpusActiveList.keys():
             if streamConfig['id'] in self.streamsList:
                 self.log.info("This stream already exist in strems list ")
             else:
-                self.gpusActiveList[gpuId].startCam(streamConfig)
+                #self.gpusActiveList[gpuId].startCam(streamConfig)
                 self.streamsList.append(streamConfig['id'])
         else:
             self.log.info("This GPU is not starting")
@@ -102,11 +102,11 @@ if __name__ == "__main__":
     manager = Manager(log)
     with open('config/Gpu_default.yaml') as f:    
         defaultConfig = yaml.load(f, Loader=yaml.FullLoader)
-    with open('config/Stream_default.yaml') as f:    
-        camConfig = yaml.load(f, Loader=yaml.FullLoader)
+    #with open('config/Stream_default.yaml') as f:    
+    #    camConfig = yaml.load(f, Loader=yaml.FullLoader)
 
     manager.startGpu('0', defaultConfig, device)
-    manager.startStream('0', camConfig)
+    manager.startStream('0', 'config/Stream_default.yaml', defaultConfig, log)
 
     #with open('config/defaultConfig.yaml', 'w') as f:    
     #    data = yaml.dump(defaultConfig, f)

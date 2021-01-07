@@ -4,6 +4,7 @@ import queue, threading
 import logging
 import random
 import json
+import yaml
 import math
 import numpy as np
 import cv2
@@ -12,51 +13,77 @@ import tensorflow as tf
 
 from tf2_yolov4.anchors import YOLOV4_ANCHORS
 from tf2_yolov4.model import YOLOv4
-from deep_sort import nn_matching
-from deep_sort import preprocessing
-import deep_sort.generate_detections as gdet
-from deep_sort.detection import Detection
-from deep_sort.tracker import Tracker
 
 import videoCapture
 # from server import log
 
 class GpuDevice(threading.Thread):
-    def __init__(self, id, device, config, log):        
+    def __init__(self, id, device, configFileName, log):
+        self.ready = False
         self.id = id
         self.log = log
-        self.frame = []
         self.device = device
-        self.config = config
-        self.cnt = 0
-        self.cams = []
-        self.img_size = config['img_size']
-        self.body_min_w = config['body_min_w']
-        self.max_hum_w = int(self.img_size/2)
-        self.detector = YOLOv4(
-            input_shape=(config["img_size"], config["img_size"], 3), 
-            anchors=YOLOV4_ANCHORS, 
-            num_classes=80, 
-            training=False, 
-            yolo_max_boxes=config["yolo_max_boxes"], 
-            yolo_iou_threshold=config["yolo_iou_threshold"], 
-            yolo_score_threshold=config["yolo_score_threshold"]) 
-        self.detector.load_weights(self.config['detector_filename'])
-        self.encoder = gdet.create_box_encoder(self.config['encoder_filename'], batch_size=self.config['batch_size'])
-        self._stopevent = threading.Event()
-        print("created ok")
-        threading.Thread.__init__(self)
-        #t = threading.Thread(target=self._reader)
-        #t.daemon = True
-    
-    def startCam(self, camConfig):
-        print('start video: ', camConfig['id'])
-        #id, url, borders, skipFrames, max_cosine_distance, nn_budget
-        cam =  videoCapture.VideoCapture(camConfig, self.config)
-        self.cams.append(cam)
-        print(self.cams[0].id)
-        if(len(self.cams)==1):
-            self.start()
+        try:
+            with open(configFileName) as f:    
+                self.config = yaml.load(f, Loader=yaml.FullLoader)        
+            if device:
+                with tf.device(self.device):
+                    self.detector = YOLOv4(
+                        input_shape=(self.config["img_size"], self.config["img_size"], 3), 
+                        anchors=YOLOV4_ANCHORS, 
+                        num_classes=80, 
+                        training=False, 
+                        yolo_max_boxes=self.config["yolo_max_boxes"], 
+                        yolo_iou_threshold=self.config["yolo_iou_threshold"], 
+                        yolo_score_threshold=self.config["yolo_score_threshold"]) 
+                    self.detector.load_weights(self.config['detector_filename'])
+            else:
+                self.detector = YOLOv4(
+                    input_shape=(self.config["img_size"], self.config["img_size"], 3), 
+                    anchors=YOLOV4_ANCHORS, 
+                    num_classes=80, 
+                    training=False, 
+                    yolo_max_boxes=self.config["yolo_max_boxes"], 
+                    yolo_iou_threshold=self.config["yolo_iou_threshold"], 
+                    yolo_score_threshold=self.config["yolo_score_threshold"]) 
+                self.detector.load_weights(self.config['detector_filename'])
+            self.cnt = 0
+            self.frame = []
+            self.cams = []
+            self.img_size = self.config['img_size']
+            self._stopevent = threading.Event()
+            self.ready = True
+            print("GPU created ok")
+            threading.Thread.__init__(self)
+            #t = threading.Thread(target=self._reader)
+            #t.daemon = True
+        except:
+            print("Can not start GPU for " + id + " " + config)            
+            # traceback.print_exception(*sys.exc_info()) 
+            print("VideoStream err:", sys.exc_info())
+
+
+    def startCam(self, camConfigFileName, iter):
+        if iter < 100:
+            print('try to start video: ', camConfigFileName, iter)
+            iter += 1
+            #id, url, borders, skipFrames, max_cosine_distance, nn_budget
+            if self.ready:
+                cam =  videoCapture.VideoCapture(camConfigFileName, self.config, self.log)
+                if cam.id:
+                    self.cams.append(cam)
+                    print("Current num of caneras:", len(self.cams))
+                    if(len(self.cams) > 0):
+                        if self._stopevent.isSet(): 
+                            self.start()
+                else:
+                   print("can not start Stream")
+            else:                
+                print("wait")
+                time.sleep(1)
+                self.startCam(camConfigFileName, iter)
+        else:
+            print("GPU is not ready for long time")
 
     def stopCam(self, id):
         print('stop video: ', id)
@@ -64,6 +91,7 @@ class GpuDevice(threading.Thread):
         time.sleep(0.1)
         del self.cams[0]
         if(len(self.cams)==0):
+            print("Any cameras are not present!")
             time.sleep(0.5)
             self.kill()
 
@@ -76,44 +104,39 @@ class GpuDevice(threading.Thread):
         self.killed = True
 
     def run(self):
-        print("start camera")
-        cnt_people_in = []
-        tr = True 
+        self.log.debug("start GPU")
         while not self._stopevent.isSet():
             start = time.time()
             self.cnt += 1
             frames = []
             for cam in self.cams:
-                if self.cams[0]._stopevent.isSet():
+                if cam._stopevent.isSet():
+                    self.log.debug("cam stopped: ", cam.id)
                     #delete cam from cams list
                     pass
                 else:
                     frames.append(cam.read())
-                    if (tr): cv2.imwrite("video/39_2.jpg", frames[0])            
-            frame = frames[0]
-            print("frame rs = ", frame.shape)
-            # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            # convert numpy opencv to tensor
-            frame_tz = tf.convert_to_tensor(frame, dtype=tf.float32, dtype_hint=None, name=None)
-            frame_tz = tf.expand_dims(frame_tz, axis=0) / 255.0
-            boxes, scores, classes, valid_detections = detector.predict(frame_tz)            
-            #    obj_detec = non_max_suppression(obj_detec, self.conf_thres, self.nms_thres)
-            boxs = []
-            confs = []
-            for i in range(len(boxes[0])): 
-                if scores[0][i] > 0:
-                    if classes[0][i] == 0:
-                        boxs.append((np.array(boxes[0][i])*self.img_size))
-                        confs.append(score[0][i])
-            if(len(boxs)):
-                t_start2 = time.time()
-                features = self.encoder(frame, boxs)
-                detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
-                for i, cam in enumerate(self.cams):
-                    cam.track(detections, frames[i])
-                    
+                    self.log.debug("cur_frame", cam.id, cam.cur_frame)
+                    #if (tr): cv2.imwrite("video/39_2.jpg", frames[0])            
+            if frames:
+                # frame = frames[0]
+                # print("frame rs = ", frames.shape)
+                # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # convert numpy opencv to tensor
+                frames_tf = tf.convert_to_tensor(frames, dtype=tf.float32, dtype_hint=None, name=None) / 255.0
+                #frames_tf = tf.expand_dims(frames_tf, axis=0) / 255.0
+                boxes, scores, classes, valid_detections = self.detector.predict(frames_tf)            
+                #    obj_detec = non_max_suppression(obj_detec, self.conf_thres, self.nms_thres)
+                for j in range(len(frames)):
+                   self.cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
+            else:
+                self.log.info("Any available streams")
+                self.kill()
+                
+
 
 if __name__ == "__main__":
+    #tf.debugging.set_log_device_placement(True)
     log = logging.getLogger('app')
     log.setLevel(logging.DEBUG)
     f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
@@ -121,34 +144,47 @@ if __name__ == "__main__":
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(f)
     log.addHandler(ch)
-    with open('config/GPU_default.yaml') as f:    
-        defaultConfig = yaml.load(f, Loader=yaml.FullLoader)
-    with open('config/Stream_default.yaml') as f:    
-        camConfig = yaml.load(f, Loader=yaml.FullLoader)
-
+    device = None
+    log.debug(tf.config.experimental.list_physical_devices())
+    # my_devices = tf.config.experimental.list_physical_devices(device_type='CPU')
+    # tf.config.experimental.set_visible_devices(devices= my_devices, device_type='CPU')
+    gpus = tf.config.experimental.list_physical_devices('GPU')
+    if gpus:
+        log.debug("cuda is available " + str(len(gpus)))
+        device = gpus[0].name
+    else:
+        print("cuda is not available")
+        # device = tf.config.experimental.list_physical_devices('CPU')[0].name
+    # print("device=", device)
+    tr = False
+    gpu = None
     try:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        gpu = GpuDevice("test", device, defaultConfig, log)
-        gpu.startCam(camConfig)
-        time.sleep(10)
-        while True:
-            #for i, cam in enumerate(gpu.cams):
-            #    if (cam.display_video_flag):
-            #        print(type(cam.outframe))
-            #        if cam.outframe.any():
-            #            cv2.imshow("preview_"+str(i), cam.outFrame)
-            
-            key = cv2.waitKey(100)
-            if key & 0xFF == ord('q'):
-                print("key=",key)
-                break
+        gpu = GpuDevice("test", device, 'config/GPU_default.yaml', log)
+        time.sleep(5)
+        gpu.startCam('config/Stream_39.yaml', 0)
+        time.sleep(5)
+        gpu.startCam('config/Stream_43.yaml', 0)        
+        tr = True
     except:
-        print("Unexpected error:", sys.exc_info()[0])
-        raise
-        print("stop")
-    print("try stop app")
-    gpu.kill()
-    print("try 2 stop app")
+        log.debug(sys.exc_info())
+    if tr:
+        while True:
+            time.sleep(3)
+            log.debug("tik")
+            try:
+                log.debug("gpu.cams[0].outFrame "+ str(len(gpu.cams)))
+                log.debug("frame "+ gpu.cams[0].id +" "+ str(len(gpu.cams[0].outFrame)))
+                log.debug("frame "+ gpu.cams[0].id +" "+ str(gpu.cams[0].cur_frame))
+                if gpu.cams[0].outFrame:
+                    cv2.imshow('Avi_39', gpu.cams[0].outFrame)
+                if gpu.cams[1].outFrame:
+                    cv2.imshow('Avi_43', gpu.cams[1].outFrame)
+                key = cv2.waitKey(1)
+                if key & 0xFF == ord('q'): break
+            except KeyboardInterrupt:
+                log.debug("try to stop")
+                gpu.kill()
+                break
     cv2.destroyAllWindows()
-    print("stop app")
+    log.debug("Stoped - OK")
     

@@ -7,10 +7,7 @@ from tf2_yolov4.anchors import YOLOV4_ANCHORS
 from tf2_yolov4.model import YOLOv4
 import math
 
-from deep_sort import nn_matching
-import deep_sort.generate_detections as gdet
-from deep_sort.detection import Detection
-from deep_sort.tracker import Tracker
+import videoCapture
 
 writeVideo_flag = True
 show_fh_fw = (416, 512)
@@ -38,10 +35,6 @@ detector = YOLOv4(
 )
 detector.load_weights("models/yolov4.h5")
 
-max_cosine_distance = 0.2 # 03
-encoder = gdet.create_box_encoder("models/mars-small128.pb", batch_size=64)
-metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, None)
-tracker = Tracker(metric)
 border_lines = {'border1':[[0, 100], [312, 104]]}
 
 def drawBorderLines(frame):
@@ -79,34 +72,24 @@ def track_intersection_angle(A,B):
 
 if __name__ == "__main__":    
     gpus = tf.config.experimental.list_physical_devices('GPU')
+    device = None
     if gpus:
         print("is cuda available", gpus)
+        device = gpus[0].name
+    with open('config/GPU_default.yaml') as f:    
+        defaultConfig = yaml.load(f, Loader=yaml.FullLoader)    
+    gpu = GpuDevice("test", device, defaultConfig, log)
+    gpu.startCam('config/Stream_default.yaml')
+    cams = [
 
-#  tracker
-    #cfg_track = edict({})
-    #if cfg_track_path is not None:
-    #    assert(os.path.isfile(cfg_track_path))
-    #with open(cfg_track_path, 'r') as fo:
-    #    cfg_track.update(yaml.load(fo.read()))
-    # print("cfg_track", cfg_track.DEEPSORT)
-
-    encoder = gdet.create_box_encoder('models/mars-small128.pb', batch_size=64)
-    metric = nn_matching.NearestNeighborDistanceMetric("cosine", max_cosine_distance, None)
-    tracker = Tracker(metric)
- 
-    # video parameters
-    cap = cv2.VideoCapture(video_path)
-    cap1 = cv2.VideoCapture(video_path1)
-    im_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    im_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        ]    
     print("frame img size", im_width, im_height)
-
     if writeVideo_flag:
-        outFile = video_path+"_tf.avi"
-        outFile1 = video_path1+"_tf.avi"
+        outFile = "mstr0_tf.avi"
+        outFile1 = "mstr1_tf.avi"
         print("Save out video to file " + outFile)
-        out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 10, show_fh_fw)
-        out1 = cv2.VideoWriter(outFile1, cv2.VideoWriter_fourcc(*'XVID'), 10, show_fh_fw)
+        outs = [cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 10, show_fh_fw),
+              cv2.VideoWriter(outFile1, cv2.VideoWriter_fourcc(*'XVID'), 10, show_fh_fw)]
         # out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'MP4V'), 10, show_fh_fw)
 
 # variables
@@ -128,90 +111,32 @@ if __name__ == "__main__":
             else: break
         start = time.time()
         counter += 1
-
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         frame1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2RGB)
         frame_sm = cv2.resize(frame, (HEIGHT, WIDTH))
         frame_sm1 = cv2.resize(frame1, (HEIGHT, WIDTH))
         # convert numpy opencv to tensor
-        frames = np.stack([frame, frame1], axis=0)        
+        frames = np.stack([frame_sm, frame_sm1], axis=0)        
         frames_tf = tf.convert_to_tensor(frames, dtype=tf.float32, dtype_hint=None, name=None)/ 255.0
         print(frames_tf.shape)
         # shape=(416, 416, 3), dtype=float32)
         # frame_tz = tf.image.resize(frame_tz, (HEIGHT, WIDTH))
         #frames_tz = tf.expand_dims(frame_tz, axis=0)
         boxes, scores, classes, valid_detections = detector.predict(frames_tf)
-        print("boxes", boxes.shape)
+        # print("boxes", boxes.shape)
         # boxes (1, 64, 4)
-        boxs = []
-        confs = []
-        for j in range(len(boxes)):
-            for i in range(len(boxes[j])): 
-                if scores[j][i] > 0:
-                    if classes[j][i] == 0:
-                        boxs.append((np.array(boxes[j][i])*HEIGHT))
-                        confs.append(scores[j][i])
-                        # cv2.rectangle(frame_sm,(box[0],box[1]), (box[2],box[3]), (255,255,0), 4)
-                        #prob.append([score,cl])
-        #print("boxs", boxs)
-        # cv2.imwrite("video/frame.jpg", frame_sm)
-        features = encoder(frames[j], boxs)
-        #print(type(features[0]), type(boxs[0]))
-        detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
-        # for d in  detections: print("d=", d.__dict__)
-        tracker.predict()
-        tracker.update(detections)
-        for track in tracker.tracks:
-            # print("track", track)
-            if(not track.is_confirmed() or track.time_since_update > 1):
-                # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
-                continue
-            # x1y1 = (int(bbox[1]+(bbox[3] - bbox[1])/2), int(bbox[0]+(bbox[2] - bbox[0])/2))
-            xy = track.mean[:2].astype(np.int)# tuple(())
-            clr = (255, 255, 0) # default color
-            track_name = str(track.track_id) # default name
-            if(hasattr(track, 'xy')):
-                lst_intrsc = track_intersection_angle(track.xy[0], xy)
-                if(any(lst_intrsc)):
-                    #border_line
-                    if(not hasattr(track, 'calculated')):
-                        cnt_people_in[track.track_id] = 0
-                        track.calculated = "in_" + str(len(cnt_people_in)) + "_"
-                        track.color = (52, 235, 240)
-                        print("intersection!!", track_name, track.track_id)
-                        track.cross_cnt = path_track
-                if(hasattr(track, 'calculated')):
-                    clr = track.color
-                    track_name = track.calculated  + track_name
-                    track.cross_cnt -= 1
-                    if(track.cross_cnt < 1): track.state = 3 # delete from track list
-                track.xy.append(xy)
-                if len(track.xy) > path_track:
-                    track.xy = track.xy[-path_track:]
-                # print("[track.xy]", [track.xy])
-                # cv2.polylines(frame_sm, [np.array(track.xy)], False, clr, 3)
-            else: 
-                track.xy = [xy]
-            
-            txy =  tuple(xy)
-            cv2.circle(frame_sm, txy, 5, clr, -1)
-            #cv2.rectangle(frame_sm, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
-            # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
-            cv2.putText(frame_sm, track_name, txy, 0, 0.4, clr, 1)
-        # print("--", counter. fps)
-        drawBorderLines(frame_sm)
-        frame_out = cv2.resize(frame_sm, (512, 416))
-        cv2.putText(frame_out, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
-        cv2.putText(frame_out, "People in: "+str(len(cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
+        for j in range(len(frames)):
+            self.cam.update(boxes[j], scores[j], classes[j], frames[j]) 
+
+        print("fps",round(1./(time.time()-start), 2))
         start = time.time()
-        cv2.imshow('Yolo demo', frame_out)
-        if writeVideo_flag:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            out.write(frame)
         key = cv2.waitKey(1)
         if key & 0xFF == ord('q'): break
 
     cap.release()    
-    if writeVideo_flag: out.release()
+    cap1.release()    
+    if writeVideo_flag:
+        for out in outs:
+            out.release()        
     cv2.destroyAllWindows()
     print("Model: "+model_name+". People in: "+str(len(cnt_people_in))+", out: "+str(len(cnt_people_out)))

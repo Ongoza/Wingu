@@ -11,6 +11,7 @@ import cv2
 import tensorflow as tf
 import torch
 import torchvision.transforms as transforms
+import yaml
 
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 from deep_sort import nn_matching
@@ -22,7 +23,7 @@ from deep_sort.tracker import Tracker
 from models.models import Darknet
 from models.utils import non_max_suppression
 
-import videoCapture
+import videoCapture2 as videoCapture
 # from server import log
 
 class GpuDevice(threading.Thread):
@@ -116,7 +117,8 @@ class GpuDevice(threading.Thread):
                     for x1, y1, x2, y2, conf, cls_conf, cls_pred in item: #classes[int(cls_pred)]
                         wb = y2-y1
                         if((cls_pred == 0) and (wb < self.max_hum_w) and (wb > self.body_min_w)):
-                                boxs.append([y1, x1, y2, x2])
+                                boxs.append(np.array([y1, x1, y2, x2]))
+            # print("len=", len(boxs))
             if(len(boxs)):
                 t_start2 = time.time()
                 features = self.encoder(frame, boxs)
@@ -142,7 +144,7 @@ if __name__ == "__main__":
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(f)
     log.addHandler(ch)
-    with open('config/GPU_default.yaml') as f:    
+    with open('config/GPU_default2.yaml') as f:    
         defaultConfig = yaml.load(f, Loader=yaml.FullLoader)
     with open('config/Stream_default.yaml') as f:    
         camConfig = yaml.load(f, Loader=yaml.FullLoader)

@@ -109,6 +109,7 @@ class VideoCapture:
         return frame
 
     def track(self, detections, frame):
+        #print("start track")
         self.tracker.predict()
         self.tracker.update(detections)
         for track in self.tracker.tracks:
@@ -159,25 +160,25 @@ class VideoCapture:
                 cv2.rectangle(frame, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
                 # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
                 cv2.putText(frame, track_name, x1y1, 0, 0.4, clr, 1)
-            if(self.save_video_flag):
-                self.drawBorderLines(frame)
+        if(self.save_video_flag):
+            self.drawBorderLines(frame)
+            #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
+            cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
+            frame = cv2.resize(frame,self.save_video_res)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            self.out.write(frame)
+        if(self.display_video_flag):
+            if(not self.save_video_flag):
+                frame = self.drawBorderLines(frame)
                 #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
                 cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
-                frame = cv2.resize(frame,self.save_video_res)
+                print(self.save_video_res)
+                frame = cv2.resize(frame, self.save_video_res)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                self.out.write(frame)
-            if(self.display_video_flag):
-                if(not self.save_video_flag):
-                    frame = self.drawBorderLines(frame)
-                    #cv2.putText(frame, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
-                    cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
-                    print(self.save_video_res)
-                    frame = cv2.resize(frame, self.save_video_res)
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                self.outFrame = frame
-                #cv2.putText(frame, " out: "+str(len(cnt_people_out)), (43, 376), 0, 0.4, (0, 255, 0), 1)
-                # print("end frame")
-                #cv2.imshow("preview", frame)
+            self.outFrame = frame
+            #cv2.putText(frame, " out: "+str(len(cnt_people_out)), (43, 376), 0, 0.4, (0, 255, 0), 1)
+            # print("end frame")
+            #cv2.imshow("preview", frame)
 
     def exit(self):
         self._stopevent.set()
