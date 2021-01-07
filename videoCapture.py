@@ -140,7 +140,7 @@ class VideoCapture:
         return frame
 
     def track(self, box, score, cl, frame):
-        self.log.debug("track "+ len(box) +" "+ len(score) +" "+ len(cl))
+        self.log.debug("track "+ str(len(box)) +" "+ str(len(score)) +" "+ str(len(cl)))
         boxs = []
         confs = []
         for i in range(len(box)): 
@@ -149,7 +149,7 @@ class VideoCapture:
                  boxs.append((np.array(box[i])*self.img_size))
                  confs.append(score[i])
         if(len(boxs)):
-            self.log.debug("track 2")
+            # self.log.debug("track 2")
             start = time.time()
             features = self.encoder(frame, boxs)
             detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
@@ -162,7 +162,7 @@ class VideoCapture:
                 xy = track.mean[:2].astype(np.int)# tuple(())
                 clr = (255, 255, 0) # default color
                 track_name = str(track.track_id) # default name
-                self.log.debug("track "+ track_name)
+                # self.log.debug("track "+ track_name)
                 if(hasattr(track, 'xy')):
                     lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
                     if(any(lst_intrsc)):
@@ -191,7 +191,7 @@ class VideoCapture:
                     #cv2.rectangle(frame_sm, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
                     # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
                     cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
-        self.log.debug("--" + str(self.display_video_flag))
+        # self.log.debug("--" + str(self.display_video_flag))
         if self.save_video_flag:
             self.drawBorderLines(frame)
             cv2.putText(frame, "FPS: "+str(round(1./(time.time() - start), 2))+" frame: "+str(self.cur_frame), (10, 340), 0, 0.4, (255, 255, 0), 1)
@@ -209,10 +209,10 @@ class VideoCapture:
                 frame = cv2.resize(frame, self.save_video_res)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # save current frame
-            ret2, iWeb = cv2.imencode("jpeg", frame)
-            if(ret2): self.outFrame = iWeb.tobytes()
-            else: self.log.error("Can't convert img")
-            # self.outFrame = np.copy(frame)
+            #ret2, iWeb = cv2.imencode(".jpg", frame)
+            #if(ret2): self.outFrame = iWeb.tobytes()
+            #else: self.log.error("Can't convert img")
+            self.outFrame = np.copy(frame)
             #cv2.putText(frame, " out: "+str(len(cnt_people_out)), (43, 376), 0, 0.4, (0, 255, 0), 1)
             print("Frame saved")
             #cv2.imshow("preview", frame)

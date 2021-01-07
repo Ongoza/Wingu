@@ -73,9 +73,9 @@ class GpuDevice(threading.Thread):
                 if cam.id:
                     self.cams.append(cam)
                     print("Current num of caneras:", len(self.cams))
-                    if(len(self.cams) > 0):
-                        if self._stopevent.isSet(): 
-                            self.start()
+                    if(len(self.cams) == 1 ):
+                        print("start")
+                        self.start()
                 else:
                    print("can not start Stream")
             else:                
@@ -116,8 +116,9 @@ class GpuDevice(threading.Thread):
                     pass
                 else:
                     frames.append(cam.read())
-                    self.log.debug("cur_frame", cam.id, cam.cur_frame)
+                    #print("cur_frame", cam.id, cam.cur_frame)
                     #if (tr): cv2.imwrite("video/39_2.jpg", frames[0])            
+            # print("fr",len(frames))
             if frames:
                 # frame = frames[0]
                 # print("frame rs = ", frames.shape)
@@ -173,11 +174,11 @@ if __name__ == "__main__":
             log.debug("tik")
             try:
                 log.debug("gpu.cams[0].outFrame "+ str(len(gpu.cams)))
-                log.debug("frame "+ gpu.cams[0].id +" "+ str(len(gpu.cams[0].outFrame)))
-                log.debug("frame "+ gpu.cams[0].id +" "+ str(gpu.cams[0].cur_frame))
-                if gpu.cams[0].outFrame:
+                print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].outFrame)
+                print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].cur_frame)
+                if gpu.cams[0].outFrame.any():
                     cv2.imshow('Avi_39', gpu.cams[0].outFrame)
-                if gpu.cams[1].outFrame:
+                if gpu.cams[1].outFrame.any():
                     cv2.imshow('Avi_43', gpu.cams[1].outFrame)
                 key = cv2.waitKey(1)
                 if key & 0xFF == ord('q'): break
@@ -185,6 +186,8 @@ if __name__ == "__main__":
                 log.debug("try to stop")
                 gpu.kill()
                 break
+    if gpu:
+        gpu.kill()
     cv2.destroyAllWindows()
     log.debug("Stoped - OK")
     
