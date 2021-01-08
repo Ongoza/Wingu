@@ -22,11 +22,22 @@ class GpuDevice(threading.Thread):
         self.ready = False
         self.id = id
         self.log = log
+        self.proceedTime = 0
         self.device = device
         try:
             with open(configFileName) as f:    
                 self.config = yaml.load(f, Loader=yaml.FullLoader)        
-            if device:
+            if device == "CPU":
+                self.detector = YOLOv4(
+                    input_shape=(self.config["img_size"], self.config["img_size"], 3), 
+                    anchors=YOLOV4_ANCHORS, 
+                    num_classes=80, 
+                    training=False, 
+                    yolo_max_boxes=self.config["yolo_max_boxes"], 
+                    yolo_iou_threshold=self.config["yolo_iou_threshold"], 
+                    yolo_score_threshold=self.config["yolo_score_threshold"]) 
+                self.detector.load_weights(self.config['detector_filename'])
+            else:
                 with tf.device(self.device):
                     self.detector = YOLOv4(
                         input_shape=(self.config["img_size"], self.config["img_size"], 3), 
@@ -37,23 +48,13 @@ class GpuDevice(threading.Thread):
                         yolo_iou_threshold=self.config["yolo_iou_threshold"], 
                         yolo_score_threshold=self.config["yolo_score_threshold"]) 
                     self.detector.load_weights(self.config['detector_filename'])
-            else:
-                self.detector = YOLOv4(
-                    input_shape=(self.config["img_size"], self.config["img_size"], 3), 
-                    anchors=YOLOV4_ANCHORS, 
-                    num_classes=80, 
-                    training=False, 
-                    yolo_max_boxes=self.config["yolo_max_boxes"], 
-                    yolo_iou_threshold=self.config["yolo_iou_threshold"], 
-                    yolo_score_threshold=self.config["yolo_score_threshold"]) 
-                self.detector.load_weights(self.config['detector_filename'])
             self.cnt = 0
             self.frame = []
             self.cams = []
             self.img_size = self.config['img_size']
             self._stopevent = threading.Event()
             self.ready = True
-            print("GPU created ok")
+            print("GPU "+str(id)+" created ok")
             threading.Thread.__init__(self)
             #t = threading.Thread(target=self._reader)
             #t.daemon = True
@@ -69,7 +70,7 @@ class GpuDevice(threading.Thread):
             iter += 1
             #id, url, borders, skipFrames, max_cosine_distance, nn_budget
             if self.ready:
-                cam =  videoCapture.VideoCapture(camConfigFileName, self.config, self.log)
+                cam =  videoCapture.VideoCapture(camConfigFileName, self.config, self.device, self.log)
                 if cam.id:
                     self.cams.append(cam)
                     print("Current num of caneras:", len(self.cams))
@@ -96,11 +97,11 @@ class GpuDevice(threading.Thread):
             self.kill()
 
     def kill(self):
-        self.log.debug("kill cameras "+ str(len(self.cams)))
+        self.log.debug("start to stop GPU "+ str(self.id))
         self._stopevent.set()
         for cam in self.cams:
             cam.exit()
-        print("kill ok")        
+        self.log.info("GPU "+str(self.id)+" stopped")        
         self.killed = True
 
     def run(self):
@@ -130,6 +131,7 @@ class GpuDevice(threading.Thread):
                 #    obj_detec = non_max_suppression(obj_detec, self.conf_thres, self.nms_thres)
                 for j in range(len(frames)):
                    self.cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
+                self.proceedTime = time.time() - start
             else:
                 self.log.info("Any available streams")
                 self.kill()
@@ -145,18 +147,19 @@ if __name__ == "__main__":
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(f)
     log.addHandler(ch)
-    device = None
+    device = "CPU"
+    devices = ["CPU"]
     log.debug(tf.config.experimental.list_physical_devices())
     # my_devices = tf.config.experimental.list_physical_devices(device_type='CPU')
-    # tf.config.experimental.set_visible_devices(devices= my_devices, device_type='CPU')
-    gpus = tf.config.experimental.list_physical_devices('GPU')
-    if gpus:
+    # tf.config.experimental.set_visible_devices(devices= my_devices, device_type='CPU') 
+    for gpu in tf.config.experimental.list_physical_devices('GPU'):
         log.debug("cuda is available " + str(len(gpus)))
+        devices.append(gpu.name)
         device = gpus[0].name
     else:
         print("cuda is not available")
         # device = tf.config.experimental.list_physical_devices('CPU')[0].name
-    # print("device=", device)
+    print("devices=".join(devices))
     tr = False
     gpu = None
     try:
@@ -174,12 +177,12 @@ if __name__ == "__main__":
             log.debug("tik")
             try:
                 log.debug("gpu.cams[0].outFrame "+ str(len(gpu.cams)))
-                print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].outFrame)
-                print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].cur_frame)
+                print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].get_cur_frame())
+                #print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].cur_frame_cnt)
                 if gpu.cams[0].outFrame.any():
-                    cv2.imshow('Avi_39', gpu.cams[0].outFrame)
+                    cv2.imshow('Avi_39', gpu.cams[0].get_cur_frame())
                 if gpu.cams[1].outFrame.any():
-                    cv2.imshow('Avi_43', gpu.cams[1].outFrame)
+                    cv2.imshow('Avi_43', gpu.cams[1].get_cur_frame())
                 key = cv2.waitKey(1)
                 if key & 0xFF == ord('q'): break
             except KeyboardInterrupt:
