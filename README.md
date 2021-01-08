@@ -4,5 +4,5 @@ cd Wingu <br>
 pip install -r requirements.txt<br>
 
 RUN<br>
-python server.py
+python server.py<br>
 open in browser http://localhost:8080/static/cameras.html
