@@ -1,0 +1,14 @@
+numpy
+scipy
+wget
+seaborn
+tensorflow
+tensorflow-gpu
+opencv-python
+tqdm
+aiohttp
+aiosqlite
+aiohttp_session
+yaml
+hashlib
+wget
