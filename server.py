@@ -215,23 +215,19 @@ app.on_cleanup.append(on_shutdown)
 app['websocketscmd'] = set()
 # app['manager'] = set()
 #  start cameras manager Object
-with open('config/Gpu_default.yaml') as f:    
-    defaultConfig = yaml.load(f, Loader=yaml.FullLoader)
-with open('config/Stream_default.yaml') as f:    
-    camConfig = yaml.load(f, Loader=yaml.FullLoader)
 
-app['manager'] = gpusManager.Manager(log)
-app['manager'].startGpu('0', defaultConfig)
-app['manager'].startStream('0', camConfig)
+#app['manager'] = gpusManager.Manager(log)
+#app['manager'].startGpu('0', defaultConfig)
+#app['manager'].startStream('0', camConfig)
 
 #manager.daemon = True
 # app['manager'].startGpu("test")
-print('manager=', app['manager'].streamsList)
+# print('manager=', app['manager'].streamsList)
 # time.sleep(10)
 
 # log.info('The server running...')
 web.run_app(app)
 #  Stop cameras manager Object
-app['manager'].kill()
+# app['manager'].kill()
 #manger.join()
 log.info('The server stopped!')
