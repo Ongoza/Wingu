@@ -19,13 +19,14 @@ from deep_sort.tracker import Tracker
 
 class VideoCapture:
     def __init__(self, camConfigFile, gpuConfig, device_id, log):        
-        print("start init stream object")
+        print("start init stream object ", camConfigFile)
         self.totalFrames = 0
         self.cur_frame_cnt = 0
         self.log = log
         try:
-            with open(camConfigFile) as f:    
+            with open(os.path.join('config', camConfigFile+'.yaml')) as f:    
                 self.config = yaml.load(f, Loader=yaml.FullLoader)
+            # print("stream config", self.config)
             self.id = self.config['id']
             self.device_id = device_id
             self.url = self.config['url']
@@ -53,10 +54,10 @@ class VideoCapture:
             self.borders = self.config['borders']
             self.out = None
             if self.save_video_flag:            
-                outFile =  self.config['save_path']
+                outFile = self.config['save_path']
                 self.log.debug("Save out video to file " + outFile)
                 self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
-            self.encoder = gdet.create_box_encoder(self.config['encoder_filename'], batch_size=self.batch_size)
+            self.encoder = gdet.create_box_encoder(os.path.join('models',self.config['encoder_filename']), batch_size=self.batch_size)
             self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", self.config['max_cosine_distance'], None))
             # self.cnt_people_in = {}
             if not self.isFromFile:
@@ -65,7 +66,7 @@ class VideoCapture:
                 t.daemon = True
                 t.start()
             else:
-                self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
 
             self._stopevent = threading.Event()
             
@@ -108,11 +109,13 @@ class VideoCapture:
     def read(self):
         start = time.time()
         if self.isFromFile:
-            if self.cur_frame_cnt < self.totalFrames:
+            print("proceed_frames_cnt="+str(self.proceed_frames_cnt))
+            if self.proceed_frames_cnt < self.totalFrames:
                 ret, frame = self.cap.read()
                 self.cur_frame_cnt += 1
-                self.proceed_frames_cnt = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
-                self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.proceed_frames_cnt + self.skip_frames)
+                self.proceed_frames_cnt = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+                if self.skip_frames:
+                    self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.proceed_frames_cnt + self.skip_frames)
                 if (ret):
                    frame = cv2.resize(frame, self.frame_res)
                 else:
@@ -164,7 +167,7 @@ class VideoCapture:
 
     def track(self, box, score, cl, frame):
         start = time.time()
-        # self.log.debug("track "+ str(len(box)) +" "+ str(len(score)) +" "+ str(len(cl)))
+        #self.log.debug("Track Cam "+str(self.id)+"  frame="+ str(self.proceed_frames_cnt))
         boxs = []
         confs = []
         for i in range(len(box)): 
@@ -173,11 +176,12 @@ class VideoCapture:
                  boxs.append((np.array(box[i])*self.img_size))
                  confs.append(score[i])
         if(len(boxs)):
-            # self.log.debug("track 2")
+            #self.log.debug("track boxs "+ str(len(boxs)))
             features = self.encoder(frame, boxs)
             detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
             self.tracker.predict()
             self.tracker.update(detections)
+            self.log.debug("features "+ str(len(features)))
             for track in self.tracker.tracks:
                 if(not track.is_confirmed() or track.time_since_update > 1):
                     # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
@@ -185,7 +189,7 @@ class VideoCapture:
                 xy = track.mean[:2].astype(np.int)# tuple(())
                 clr = (255, 255, 0) # default color
                 track_name = str(track.track_id) # default name
-                # self.log.debug("track "+ track_name)
+                self.log.debug("track "+ track_name)
                 if(hasattr(track, 'xy')):
                     lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
                     if(any(lst_intrsc)):
@@ -238,17 +242,17 @@ class VideoCapture:
         self.proceedTime[1] = time.time() - start
         
 
-    def exit(self):
-        self._stopevent.set()
-        self.isRun = False
+    def kill(self):
         try:
+            self._stopevent.set()
+            self.isRun = False        
             if self.save_video_flag: self.out.release()
             if(self.cap):
                 if(self.cap.isOpened()): self.cap.release()
         except:
-            print("Unexpected error:", sys.exc_info()[0])
-            raise 
-        print("videoCapture exit done")
+            self.log.error("Unexpected error while Cam stopping")
+            print(sys.exc_info()[0]) 
+        self.log.info("videoCapture exit done")
 
 if __name__ == "__main__":
     print("start")
@@ -261,36 +265,25 @@ if __name__ == "__main__":
     log.addHandler(ch)
     
     streams = []
-    with open('config/GPU_default.yaml') as f:    
+    with open('config/Gpu_0.yaml') as f:    
         config = yaml.load(f, Loader=yaml.FullLoader)  
-    # videoCapture.VideoCapture(camConfigFileName, config, device, log)
-    streams.append(VideoCapture("config/Stream_39.yaml", config, 0, log))
+    streams.append(VideoCapture("Stream_39", config, 0, log))
     time.sleep(5)
     if len(streams) > 0:
         while True:
             try:
-                print("stream", streams[0].cur_frame_cnt, streams[0].totalFrames)
-                if streams[0]._stopevent.isSet(): 
-                    print("stop ddd")
-                    break 
-                else:
-                    frame = streams[0].read()
-                    # frame = streams[0].get_cur_frame()
+                for stream in streams:
+                    print("stream", stream.cur_frame_cnt, streams.totalFrames)
+                    frame = stream.read()
                     if frame.any():
                         cv2.imshow("preview", frame)
                     else:
                         print("skip frame")
-                    key = cv2.waitKey(10)
-                    if key & 0xFF == ord('q'): break
+                key = cv2.waitKey(2)
+                if key & 0xFF == ord('q'): break
             except:
                 print("stop by exception")
                 break
-        print("stop 10")
-
     for stream in streams:
-        stream.exit()
-    print("stop 11")
+        stream.kill()
     cv2.destroyAllWindows()
-    print("stop 12")
-    cv2.waitKey(1)
-    print("stop 13")

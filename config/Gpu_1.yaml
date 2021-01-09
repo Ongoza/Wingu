@@ -1,0 +1,8 @@
+id: gpu_1
+batch_size: 32
+img_size: 416
+detector_name: yolov4
+detector_filename: yolov4.h5
+yolo_max_boxes: 64
+yolo_iou_threshold: 0.5
+yolo_score_threshold: 0.5

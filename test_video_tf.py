@@ -35,8 +35,8 @@ detector = YOLOv4(
     num_classes=80,
     training=False,
     yolo_max_boxes=64,
-    yolo_iou_threshold=0.5,
-    yolo_score_threshold=0.5,
+    yolo_iou_threshold=0.3,
+    yolo_score_threshold=0.4,
 )
 detector.load_weights("models/yolov4.h5")
 
@@ -115,95 +115,111 @@ if __name__ == "__main__":
     cnt_people_out = {}
     path_track = 20 # how many frames in path are saves
     start = time.time()
+    skip_frames = 1
+    totalFrames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) - skip_frames
+    proceed_frames_cnt = 0
+    start = time.time()
+    #jump = 2
 
 # main loop
-    while True:        
-        r, frame = cap.read()
-        if (not r):
-            print("skip frame ", skip_counter)
-            skip_counter -= 1
-            if (skip_counter > 0): continue
-            else: break
+    while True:
         start = time.time()
-        counter += 1
-
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_sm = cv2.resize(frame, (HEIGHT, WIDTH))
-        # convert numpy opencv to tensor
-        frames = np.stack([frame_sm], axis=0)
-        frames_tf = tf.convert_to_tensor(frames, dtype=tf.float32, dtype_hint=None, name=None)/ 255.0        
-        # frames_tz = tf.expand_dims(frame_tz, axis=0) 
-        # print(frames_tz.shape)
-        boxes, scores, classes, valid_detections = detector.predict(frames_tf)
-        #print("boxes", boxes.shape)
-        boxs = []
-        confs = []
-        for j in range(len(boxes)):
-            for i in range(len(boxes[j])):
-                # print("boxes[j]",type(boxes[j]),boxes[j])
-                if scores[j][i] > 0:
-                    if classes[j][i] == 0:
-                        boxs.append((np.array(boxes[j][i])*HEIGHT))
-                        confs.append(scores[j][i])
-                    # cv2.rectangle(frame_sm,(box[0],box[1]), (box[2],box[3]), (255,255,0), 4)
-                    #prob.append([score,cl])
-            #print("boxs", boxs)
-            # cv2.imwrite("video/frame.jpg", frame_sm)
-            # boxs.append(np.zeros(4))
-            #print("boxes[j]",type(boxes),boxes)
-            features = encoder(frame_sm, boxs)
-            print("features", features)
-            detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
-            # for d in  detections: print("d=", d.__dict__)
-            tracker.predict()
-            tracker.update(detections)
-            for track in tracker.tracks:
-                # print("track", track)
-                if(not track.is_confirmed() or track.time_since_update > 1):
-                    # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
-                    continue
-                # x1y1 = (int(bbox[1]+(bbox[3] - bbox[1])/2), int(bbox[0]+(bbox[2] - bbox[0])/2))
-                xy = track.mean[:2].astype(np.int)# tuple(())
-                clr = (255, 255, 0) # default color
-                track_name = str(track.track_id) # default name
-                if(hasattr(track, 'xy')):
-                    lst_intrsc = track_intersection_angle(track.xy[0], xy)
-                    if(any(lst_intrsc)):
-                        #border_line
-                        if(not hasattr(track, 'calculated')):
-                            cnt_people_in[track.track_id] = 0
-                            track.calculated = "in_" + str(len(cnt_people_in)) + "_"
-                            track.color = (52, 235, 240)
-                            print("intersection!!", track_name, track.track_id)
-                            track.cross_cnt = path_track
-                    if(hasattr(track, 'calculated')):
-                        clr = track.color
-                        track_name = track.calculated  + track_name
-                        track.cross_cnt -= 1
-                        if(track.cross_cnt < 1): track.state = 3 # delete from track list
-                    track.xy.append(xy)
-                    if len(track.xy) > path_track:
-                        track.xy = track.xy[-path_track:]
-                    # print("[track.xy]", [track.xy])
-                    # cv2.polylines(frame_sm, [np.array(track.xy)], False, clr, 3)
-                else: 
-                    track.xy = [xy]
-            
-                txy =  tuple(xy)
-                cv2.circle(frame_sm, txy, 5, clr, -1)
-                #cv2.rectangle(frame_sm, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
-                # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
-                cv2.putText(frame_sm, track_name, txy, 0, 0.4, clr, 1)
-            # print("--", counter. fps)
-            drawBorderLines(frame_sm)
-            frame_out = cv2.resize(frame_sm, (512, 416))
-            cv2.putText(frame_out, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
-            cv2.putText(frame_out, "People in: "+str(len(cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
-            start = time.time()
-            cv2.imshow('Yolo demo', frame_out)
-            if writeVideo_flag:
+        if proceed_frames_cnt < totalFrames:
+            print("Frame="+str(proceed_frames_cnt))
+            r, frame = cap.read()
+            counter += 1
+            if True:
+            #if jump: 
+            #    jump -= 1
+            #    continue
+            #else:
+            #    jump = 2
+                proceed_frames_cnt = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+                print(proceed_frames_cnt)
+                if skip_frames:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, proceed_frames_cnt + skip_frames)
+                if (not r):
+                    print("skip frame ", skip_counter)
+                    skip_counter -= 1
+                    if (skip_counter > 0): continue
+                    else: break
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                out.write(frame)
+                frame_sm = cv2.resize(frame, (HEIGHT, WIDTH))
+                # convert numpy opencv to tensor
+                frames = np.stack([frame_sm], axis=0)
+                frames_tf = tf.convert_to_tensor(frames, dtype=tf.float32, dtype_hint=None, name=None)/ 255.0        
+                # frames_tz = tf.expand_dims(frame_tz, axis=0) 
+                # print(frames_tz.shape)
+                boxes, scores, classes, valid_detections = detector.predict(frames_tf)
+                #print("boxes", boxes.shape)
+                boxs = []
+                confs = []
+                for j in range(len(boxes)):
+                    for i in range(len(boxes[j])):
+                        # print("boxes[j]",type(boxes[j]),boxes[j])
+                        if scores[j][i] > 0:
+                            if classes[j][i] == 0:
+                                boxs.append((np.array(boxes[j][i])*HEIGHT))
+                                confs.append(scores[j][i])
+                            # cv2.rectangle(frame_sm,(box[0],box[1]), (box[2],box[3]), (255,255,0), 4)
+                            #prob.append([score,cl])
+                    #print("boxs", boxs)
+                    # cv2.imwrite("video/frame.jpg", frame_sm)
+                    # boxs.append(np.zeros(4))
+                    #print("boxes[j]",type(boxes),boxes)
+                    features = encoder(frame_sm, boxs)
+                    print("features", len(features))
+                    detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
+                    # for d in  detections: print("d=", d.__dict__)
+                    tracker.predict()
+                    tracker.update(detections)
+                    for track in tracker.tracks:
+                        # print("track", track.track_id)
+                        if(not track.is_confirmed() or track.time_since_update > 1):
+                            # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
+                            continue
+                        # x1y1 = (int(bbox[1]+(bbox[3] - bbox[1])/2), int(bbox[0]+(bbox[2] - bbox[0])/2))
+                        xy = track.mean[:2].astype(np.int)# tuple(())
+                        clr = (255, 255, 0) # default color
+                        track_name = str(track.track_id) # default name
+                        if(hasattr(track, 'xy')):
+                            lst_intrsc = track_intersection_angle(track.xy[0], xy)
+                            if(any(lst_intrsc)):
+                                #border_line
+                                if(not hasattr(track, 'calculated')):
+                                    cnt_people_in[track.track_id] = 0
+                                    track.calculated = "in_" + str(len(cnt_people_in)) + "_"
+                                    track.color = (52, 235, 240)
+                                    print("intersection!!", track_name, track.track_id)
+                                    track.cross_cnt = path_track
+                            if(hasattr(track, 'calculated')):
+                                clr = track.color
+                                track_name = track.calculated  + track_name
+                                track.cross_cnt -= 1
+                                if(track.cross_cnt < 1): track.state = 3 # delete from track list
+                            track.xy.append(xy)
+                            if len(track.xy) > path_track:
+                                track.xy = track.xy[-path_track:]
+                            # print("[track.xy]", [track.xy])
+                            # cv2.polylines(frame_sm, [np.array(track.xy)], False, clr, 3)
+                        else: 
+                            track.xy = [xy]
+            
+                        txy =  tuple(xy)
+                        cv2.circle(frame_sm, txy, 5, clr, -1)
+                        #cv2.rectangle(frame_sm, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
+                        # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
+                        cv2.putText(frame_sm, track_name, txy, 0, 0.4, clr, 1)
+                    # print("--", counter. fps)
+                    drawBorderLines(frame_sm)
+                    frame_out = cv2.resize(frame_sm, (512, 416))
+                    cv2.putText(frame_out, "FPS: "+str(round(1./(time.time()-start), 2))+" frame: "+str(counter), (10, 340), 0, 0.4, (255, 255, 0), 1)
+                    cv2.putText(frame_out, "People in: "+str(len(cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
+                    # start = time.time()
+                    cv2.imshow('Yolo demo', frame_out)
+                    if writeVideo_flag:
+                        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        out.write(frame)
         key = cv2.waitKey(1)
         if key & 0xFF == ord('q'): break
 

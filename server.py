@@ -216,18 +216,15 @@ app['websocketscmd'] = set()
 # app['manager'] = set()
 #  start cameras manager Object
 
-#app['manager'] = gpusManager.Manager(log)
-#app['manager'].startGpu('0', defaultConfig)
-#app['manager'].startStream('0', camConfig)
+app['manager'] = gpusManager.Manager(log)
+app['manager'].startStream('test_0', camConfig)
 
-#manager.daemon = True
-# app['manager'].startGpu("test")
+manager.daemon = True
 # print('manager=', app['manager'].streamsList)
-# time.sleep(10)
+time.sleep(10)
 
 # log.info('The server running...')
 web.run_app(app)
 #  Stop cameras manager Object
-# app['manager'].kill()
-#manger.join()
+app['manager'].kill()
 log.info('The server stopped!')

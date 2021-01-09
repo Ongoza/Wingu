@@ -1,0 +1,8 @@
+cpu_config: Gpu_0
+gpus_list_active:
+- 0
+gpus_configs_list:
+- 0: Gpu_0
+- 1: Gpu_1
+autotart_streams:
+- Stream_39

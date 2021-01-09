@@ -10,8 +10,8 @@ body_res:
 display_video_flag: true
 max_cosine_distance: 0.2
 save_video_flag: true
-skip_frames: 4
-encoder_filename: models/mars-small128.pb
+skip_frames: 2
+encoder_filename: mars-small128.pb
 batch_size: 32
 img_size_start:
 - 1600
