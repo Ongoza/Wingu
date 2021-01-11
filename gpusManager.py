@@ -8,24 +8,37 @@ import logging
 import tensorflow as tf
 import yaml
 import cv2
+import nvidia_smi
+#import psutil
 
 import gpuDevice
 
 class Manager(threading.Thread):
-    def __init__(self, configFileName, log):
+    def __init__(self, configFileName):
         threading.Thread.__init__(self)
         self.gpusActiveList = {}  # running devices
         self.gpusList = [] # available devices
-        self.log = log
+        self.camsList = {} # available cams on gpus
+        self.log = logging.getLogger('app')
+        self.log.setLevel(logging.DEBUG)
+        f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG)
+        ch.setFormatter(f)
+        self.log.addHandler(ch)
+
+        self.isGPU = False
         try:
             with open(os.path.join('config', configFileName+'.yaml')) as f:    
                 self.config = yaml.load(f, Loader=yaml.FullLoader) 
             print("gpus manager config", self.config)
             gpus = tf.config.experimental.list_physical_devices('GPU')
             if gpus:
+                self.isGPU = True
+                nvidia_smi.nvmlInit()
                 if len(gpus) >= len(self.config['gpus_configs_list']):
                     for key in self.config['gpus_configs_list'].keys():               
-                        self.gpusList.append(gpus[key].name)
+                        self.gpusList.append(gpus[key].name)                        
                         if key in self.config['gpus_list_active']:
                             self.startGpu(self.config['gpus_configs_list'][key])
                     time.sleep(2)                        
@@ -37,15 +50,28 @@ class Manager(threading.Thread):
             self.log.debug("Active GPUs list: "+" ".join(self.gpusActiveList.keys()))
             if self.config['autotart_streams']:
                 for stream in self.config['autotart_streams']:
+                    self.log.debug("try to autostart "+ stream)
                     self.startStream(stream)
         except:
-            log.error("Can not start gpus manager")
-            self.kill()
+            self.log.error("Can not start gpus manager")
             print(sys.exc_info())
+            self.kill()            
+
+    def getHardwareStatus(self):
+        res = {}
+        if self.isGPU:
+            for i in self.camsList:
+                r = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
+                res["GPU_"+str(i)] = {"Gpu":res.gpu, "Mem":res.memory}
+        res["CPU"] = psutil.cpu_percent()
+        res["Mem"] = psutil.virtual_memory().percent
+        res["Mem %"] = psutil.virtual_memory().available * 100 / psutil.virtual_memory().total
+        # res["Disk %"] = psutil
+        return res
 
     def startGpu(self, configFileName, device_id="CPU"):
         # id 0 - CPU, 1 - the first GPU,  etc 
-        self.log.debug("start gpu: "+ str(device_id) + " ".join([str(key) for key in self.gpusActiveList.keys()]))
+        self.log.debug("start gpu: "+ str(device_id) + " ".join(self.getActiveGpusList()))
         if device_id in self.gpusActiveList.keys():
             self.log.debug("GPU "+str(device_id)+" is already running")
         else:
@@ -54,22 +80,59 @@ class Manager(threading.Thread):
                 # gpu = GpuDevice(device, 'GPU_0', log)
                 self.gpusActiveList[device_id] = gpuDevice.GpuDevice(device_id, configFileName, self.log)
                 self.log.info("GPU "+ str(device_id) +" is running OK ")
-                self.log.debug("added gpu "+ str(device_id) +" to list: "+" ".join([str(key) for key in self.gpusActiveList.keys()]))
+                self.log.debug("added gpu "+ str(device_id) +" to list: "+" ".join(self.getActiveGpusList()))
             except:
                 self.log.error("GPU "+str(device_id)+" is not running OK ")
                 print(sys.exc_info())
             
+    def getActiveGpusList(self):
+        res = []
+        for gpu_id in self.gpusActiveList.keys():
+            try:
+                if self.gpusActiveList[gpu_id].id:
+                    res.append(gpu_id)
+                    self.log.debug("ok " + gpu_id)
+            except:
+                print("except in getActiveGpusList")
+                del self.gpusActiveList[gpu_id]
+        return res
+
+    def getCamFrame(self, cam_id):
+        res = None
+        if cam_id in self.camsList.keys():
+            gpu_id = self.camsList[cam_id]
+            if gpu_id in self.gpusActiveList.keys():
+                try:
+                    print("check gpu", self.gpusActiveList[gpu_id].id)
+                    if self.gpusActiveList[gpu_id].id:
+                        for cam in self.gpusActiveList[gpu_id].getCamsList():
+                            res = res.append(cam.get_status)
+                except:
+                    self.error.log("Can not take status GPU in Manager! GPU:" + gpu_id)
+            return res
+            
+    def getCamsStatus(self):
+        res =[]
+        for gpu_id in self.getActiveGpusList():
+            try:
+                print("check cams in gpu", gpu_id)
+                for cam in self.gpusActiveList[gpu_id].getCamsList():
+                    res.append(cam.get_status)
+            except:
+                self.error.log("Can not take status GPU in Manager! GPU:" + gpu_id)
+        return res
+
     def startStream(self, config, device=None):
         self.log.info("Start stream "+str(config)+" on device "+str(device))
         if device:
-            if device in self.gpusActiveList.keys():
+            if device in self.getActiveGpusList():
                 self.gpusActiveList[device].startCam(config, device)
             else:
                 self.log.info("Device "+str(device)+" is not availble")
         else:
             devices_cnt = len(self.gpusList)
             devices_cnt_act = len(self.gpusActiveList)
-            act_ids = list(self.gpusActiveList.keys())
+            act_ids = self.getActiveGpusList()
             if devices_cnt >= devices_cnt_act:
                 if devices_cnt == 1:
                     if devices_cnt_act == 1:
@@ -116,19 +179,14 @@ class Manager(threading.Thread):
 
 
 if __name__ == "__main__":
-    log = logging.getLogger('app')
-    log.setLevel(logging.DEBUG)
-    f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    ch.setFormatter(f)
-    log.addHandler(ch)
-    manager = Manager('Gpus_manager_default', log)
+    manager = Manager("Gpus_manager_default")
     time.sleep(10)
-    gpu_keys = list(manager.gpusActiveList.keys())
+    gpu_keys = manager.getActiveGpusList()
     gpu = manager.gpusActiveList[gpu_keys[0]]
-    print("GPU", gpu_keys[0], gpu_keys[0])
+    print("GPU", " ".join(gpu_keys))
     # print("gpu.cams[0]", gpu.cams[0].id)
+    # manager.startStream(""
+    # )
     while True:
         time.sleep(3)
         log.debug("tik")

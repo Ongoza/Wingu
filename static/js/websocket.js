@@ -19,17 +19,21 @@ function WebSocketCmd() {
                wsCmd.onmessage = function (evt) { 
                   // var received_msg = evt.data;
                   console.log("Message is received: ", evt.data);
-                  try{
-
-                      let jsonData = JSON.parse(evt.data);
-                      console.log("Message is received: ", jsonData);
-                      if(jsonData.hasOwnProperty('cameras')){
-                            console.log("cameras list updating...");
-                            jsonData.cameras.forEach((row) => { addRow(row); });
-                      }else if(jsonData.hasOwnProperty('camera')){
-                        console.log("!!!camera data updating...", jsonData);
-                      }else{
-                        console.log("Can not detect websocket command!!", evt.data);
+                   try {
+                       if (evt.data instanceof Blob) {
+                            console.log("Binary data!")
+                           putFrame(URL.createObjectURL(evt.data));
+                       } else {
+                          let jsonData = JSON.parse(evt.data);
+                          console.log("Message is received: ", jsonData);
+                          if (jsonData.hasOwnProperty('cameras')) {
+                              console.log("cameras list updating...");
+                              jsonData.cameras.forEach((row) => { addRow(row); });
+                          } else if (jsonData.hasOwnProperty('camera')) {
+                              console.log("!!!camera data updating...", jsonData);
+                          } else {
+                              console.log("Can not detect websocket command!!", evt.data);
+                          }
                       }
                   }catch (error) {
                         console.error(error);

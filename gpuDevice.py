@@ -67,6 +67,10 @@ class GpuDevice(threading.Thread):
             print("GPU err:", sys.exc_info())
             self.kill()
 
+    def getCamsList(self):
+        # check if cam exists then update cams list and retur it
+        return self.cams
+
     def startCam(self, camConfigFileName, iter):
         if iter < 100:
             print('try to start video: ', camConfigFileName, iter)

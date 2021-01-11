@@ -15,7 +15,7 @@ from pathlib import Path
 from middlewares import authorize
 # from motor import motor_asyncio as ma
 # import asyncio
-import io
+import io, sys
 import sqlite3
 import cv2 
 import json
@@ -26,6 +26,7 @@ import ssl
 from views.websocket import WebSocket
 import logging
 import yaml
+import time
 
 #import camera
 import gpusManager
@@ -78,7 +79,9 @@ async def getFileImg(request):
         print("can not open file")
         await web.json_response({'error':[fileName,"can not open file"]})
 
-    
+async def Index(request):
+    return web.HTTPFound('static/testVideo.html')
+
 async def WebSocketCmd(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
@@ -97,10 +100,18 @@ async def WebSocketCmd(request):
                     # print(camerasListData)
                     await ws.send_json(camerasListData)
                 elif msg_json['cmd'] == 'getFileImag':
-                    pass
+                    print("testImg")
+                    img = cv2.imread('video/cars.jpg')
+                    print("img", len(img))
+                    res = cv2.imencode('.jpg', img)[1].tobytes()
+                    print("res", len(res))
+                    cv2.imwrite("video/dd.jpg", img)
+                    await ws.send_bytes(res)
                 else:
+                    print("error websocket command")
                     await ws.send_json({'error':{'unknown', msg.data}})
             except:
+                print(sys.exc_info())
                 await ws.send_json({'error':["can not parse json", msg.data]})
         elif msg.type == WSMsgType.ERROR:
             print('ws connection closed with exception %s' % ws.exception())
@@ -109,14 +120,17 @@ async def WebSocketCmd(request):
     return ws
 
 routes = [
+    ('GET', '/',  Index),
     ('GET', '/ws',  WebSocket),
     ('GET', '/wsCmd',  WebSocketCmd),
+    #('GET', '/testImg',  testImg),
     # ('*',   '/login',   Login,     'login'),
     # ('POST', '/sign/{action}',  Sign,    'sign'),
     ('GET',  '/camerasList', camerasList),
     ('GET',  '/getFileImg', getFileImg),
     ('GET',  '/filesList', filesList),
     ('POST',  '/addToQueue', addToQueue),
+
 ]
 
 async def on_shutdown(app):
@@ -137,7 +151,7 @@ app = web.Application()
 for route in routes:
     app.router.add_route(route[0], route[1], route[2])
 app['static_root_url'] = '/static'
-app.router.add_static('/static', 'static', name='static')
+app.router.add_static('/static', 'static', name='static', append_version=True)
 # app.router.add_static('/', 'index', name='static')
 # end route part
 
@@ -147,13 +161,14 @@ async def background_process():
         log.debug('Run background task each 1 min')
         print("len websocketscmd:", str(len(app['websocketscmd'])))
         try:
-            if app['manager']:
+            if 'manager' in app:
                 if any(app['manager'].gpusActiveList):
                     print("cnt=", app['manager'].gpusActiveList['test'].cnt)
                     #app['manager'].camActiveObjList['test'].cnt = 20
 
         except:
             print('Errror')
+            print(sys.exc_info())
         if len(app['websocketscmd'])>0:
             print("start send back")
             try:
@@ -161,17 +176,18 @@ async def background_process():
                     await client.send_json({'camera':[1,2,3]})
             except:
                 print("Unexpected error:", sys.exc_info()[0])
-                raise
         else:
             print("len=0")
         await asyncio.sleep(6)
-async def start_background_tasks(app):
-    app['dispatch'] = asyncio.create_task(background_process())
-async def cleanup_background_tasks(app):
-    app['dispatch'].cancel()
-    await app['dispatch']
-app.on_startup.append(start_background_tasks)
-app.on_cleanup.append(cleanup_background_tasks)
+
+#async def start_background_tasks(app):
+#    app['dispatch'] = asyncio.create_task(background_process())
+
+#async def cleanup_background_tasks(app):
+#    app['dispatch'].cancel()
+#    await app['dispatch']
+#app.on_startup.append(start_background_tasks)
+#app.on_cleanup.append(cleanup_background_tasks)
 #  end background task
 
 def get_db_path():
@@ -213,18 +229,16 @@ try_make_db()
 
 app.on_cleanup.append(on_shutdown)
 app['websocketscmd'] = set()
-# app['manager'] = set()
 #  start cameras manager Object
+print("starting GPU manager")
+# app['manager'] = set()
+# app['manager'] = gpusManager.Manager("Gpus_manager_default")
+# time.sleep(10)
 
-app['manager'] = gpusManager.Manager(log)
-app['manager'].startStream('test_0', camConfig)
-
-manager.daemon = True
-# print('manager=', app['manager'].streamsList)
-time.sleep(10)
-
-# log.info('The server running...')
+# manager.daemon = True
+log.info('Running...')
 web.run_app(app)
 #  Stop cameras manager Object
-app['manager'].kill()
+if 'manager' in app:
+    app['manager'].kill()
 log.info('The server stopped!')

@@ -79,7 +79,8 @@ class VideoCapture:
     def get_status(self):
         return {
             "id":self.id, 
-            "save_video_res":self.save_video_res, 
+            "save_video_res":self.save_video_res,
+            "device_id":self.device_id,
             "skip_frames":self.skip_frames,
             "display_video_flag":self.display_video_flag,
             "cur_frame_cnt": self.cur_frame_cnt,
@@ -181,7 +182,7 @@ class VideoCapture:
             detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
             self.tracker.predict()
             self.tracker.update(detections)
-            self.log.debug("features "+ str(len(features)))
+            self.log.debug("traks "+ str(len(self.tracker.tracks)))
             for track in self.tracker.tracks:
                 if(not track.is_confirmed() or track.time_since_update > 1):
                     # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
@@ -189,7 +190,7 @@ class VideoCapture:
                 xy = track.mean[:2].astype(np.int)# tuple(())
                 clr = (255, 255, 0) # default color
                 track_name = str(track.track_id) # default name
-                self.log.debug("track "+ track_name)
+                # self.log.debug("track "+ track_name)
                 if(hasattr(track, 'xy')):
                     lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
                     if(any(lst_intrsc)):
@@ -215,7 +216,7 @@ class VideoCapture:
                 if(self.isDrow):    
                     txy =  tuple(xy)
                     cv2.circle(frame, txy, 5, clr, -1)
-                    #cv2.rectangle(frame_sm, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
+                    # cv2.rectangle(frame_sm, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
                     # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
                     cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
         # self.log.debug("--" + str(self.display_video_flag))

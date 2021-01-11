@@ -1,14 +1,21 @@
+# !!!!need setuptools
 numpy
-sklearn=0.21
+scikit-learn==0.22.2
 scipy
 wget
+pyaml
 seaborn
+envparse
 tqdm
 aiohttp
 aiosqlite
 aiohttp_session
-yaml
-hashlib
 tensorflow
-tensorflow-gpu
 opencv-python
+# psutil for Windows needs https://github.com/lucasg/Dependencies
+psutil 
+# for systems with NVIDIA® GPU card with CUDA® architectures 3.5, 5.0, 6.0, 7.0, 7.5, 8.0 and higher than 8.0
+# https://developer.nvidia.com/cuda-gpus
+# need to install the Nvidia CUDA framework and the latest Nvidia driver
+tensorflow-gpu
+nvidia-ml-py3
