@@ -29,74 +29,13 @@
     <!-- <script src="js/websocket.js"></script> -->
     <script src="js/websocket.js"></script>
     <script src="js/nav.js"></script>
+    <script src="js/drawBorders.js"></script>
+
     <script>
         var divNewCamera = document.createElement('div');
         divNewCamera.id = 'divNewCamera';
         var curCamId = null;
-        //'39': 
-        // { 'id': 'test00', 
-        //   'uid': 'lynE3ce', 
-        // 'url': 'video/39.avi', 
-        // 'isFromFile': True, 
-        // 'save_path': 'video/39_out.avi', 
-        // 'body_min_w': 64, 
-        // 'path_track': 20, 
-        // 'body_res': [256, 128], 
-        // 'display_video_flag': True, 
-        // 'max_cosine_distance': 0.2, 
-        // 'save_video_flag': True, 
-        // 'skip_frames': 0, 
-        // 'encoder_filename': 'mars-small128.pb', 
-        // 'batch_size': 32, 
-        // 'img_size_start': [1600, 1200], 
-        // 'save_video_res': [720, 540], 
-        // 'borders': { 'border1': [[0, 104], [312, 104]] } }
-        divNewCamera.innerHTML = `
-                            <h2 id="head_page">Config<span></span></h2>
-                            <form>
-
-                            <div class="form-group row">
-                            <label for="cam_name" class="col-sm-2 col-form-label col-form-label-sm">Id</label>
-                            <div class="col-sm-10">
-                            <input type="text" class="form-control form-control-sm" id="cam_id" placeholder="">
-                            </div></div>
-
-                            <div class="form-group row">
-                            <label for="cam_name" class="col-sm-2 col-form-label col-form-label-sm">Name</label>
-                            <div class="col-sm-10">
-                            <input type="text" class="form-control form-control-sm" id="cam_name" placeholder="">
-                            </div></div>
-
-                            <div class="form-group row">
-                            <label for="cam_name" class="col-sm-2 col-form-label col-form-label-sm">isFromFile</label>
-                            <div class="col-sm-10">
-                            <input type="text" class="form-control form-control-sm" id="cam_isFromFile" placeholder="">
-                            </div></div>
-
-                            <div class="form-group row">
-                            <label for="cam_url" class="col-sm-2 col-form-label col-form-label-sm">Url</label>
-                            <div class="col-sm-10">
-                            <input type="text" class="form-control form-control-sm" id="cam_url" placeholder="rtsp://192.168.1.1:8070/video1">
-                            </div></div>
-
-                            <div class="form-group row">
-                            <label for="cam_comments" class="col-sm-2 col-form-label col-form-label-sm">Comments</label>
-                            <div class="col-sm-10">
-                            <input type="text" class="form-control form-control-sm" id="cam_comments">
-                            </div></div>
-
-                            <div class="form-group row">
-                            <label for="cam_borders" class="col-sm-2 col-form-label col-form-label-sm">Borders</label>
-                            <div class="col-sm-10" id="cam_borders">
-                            </div></div>
-
-                            </form>
-                            <div class="btn-group" role="group" aria-label="Save data">
-                            <button type="button" class="btn btn-secondary" onclick="showCamList();return false;">Skip&Back</button>
-                            <button type="button" class="btn btn-secondary" onclick="confCamera();return false;">Undo</button>
-                            <button type="button" class="btn btn-secondary" onclick="saveCamera();return false;">Save&Back</button>
-                            </div>
-                            `;
+        divNewCamera.innerHTML = "";
 
         function clickRow(el) {
             console.log("id: ", el.id);
@@ -109,7 +48,7 @@
         function configViewUpdate(typeConfig) {
             console.log("start configViewUpdate()", typeConfig)
             try {
-                if (typeConfig == 'streamsConfigList') {                    
+                if (typeConfig == 'streamsConfigList') {
                     if (localStorage.getItem('streamsConfigList') != null) {
                         let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
                         console.log("streamsConfigList", typeof (streamsConfigList), streamsConfigList);
@@ -188,7 +127,7 @@
         function addRow(name, data) {
             console.log("add row", name, data['id']);
             let path = "false";
-            if (data['save_video_flag'] == true){
+            if (data['save_video_flag'] == true) {
                 path = data['save_path'];
             }
             // console.log($('#camerasTable').find('tbody').children().length);
@@ -211,29 +150,29 @@
         let divTable = document.createElement('div');
         divTable.id = 'camerasTableDiv';
         divTable.innerHTML = `
-                            <table id="camerasTable" class="table table-striped table-hover table-sm table-bordered">
+                                <table id="camerasTable" class="table table-striped table-hover table-sm table-bordered">
 
-                            <thead class="thead-dark">
-                            <tr>
-                            <th scope="col">#</th>
-                            <th scope="col">ID</th>
-                            <th scope="col">Name</th>
-                            <th scope="col">URL</th>
-                            <th scope="col">SaveToFile</th>
-                            <th scope="col">Display</th>
-                            <th scope="col">Online</th>
-                            <th scope="col">Borders</th>
-                            <th scope="col">Edit</th>
-                            <th scope="col">Delete</th>
-                            </tr>
-                            </thead>
-                            <tbody id='camerasTableBody'></tbody>
-                            </table>
-                            <div class="btn-group" role="group" aria-label="">
-                                <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCamera(); return false;">New camera</button>
-                                <button type="button" class="btn btn-secondary"  onclick="curCamId = null; confCameraFile(); return false;">New local file</button>
-                            </div>
-                            `;
+                                <thead class="thead-dark">
+                                <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">ID</th>
+                                <th scope="col">Name</th>
+                                <th scope="col">URL</th>
+                                <th scope="col">SaveToFile</th>
+                                <th scope="col">Display</th>
+                                <th scope="col">Online</th>
+                                <th scope="col">Borders</th>
+                                <th scope="col">Edit</th>
+                                <th scope="col">Delete</th>
+                                </tr>
+                                </thead>
+                                <tbody id='camerasTableBody'></tbody>
+                                </table>
+                                <div class="btn-group" role="group" aria-label="">
+                                    <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCamera(); return false;">New camera</button>
+                                    <button type="button" class="btn btn-secondary"  onclick="curCamId = null; confCameraFile(); return false;">New local file</button>
+                                </div>
+                                `;
 
         function getCamerasList() {
             if (wsCmd != null) {
@@ -275,34 +214,94 @@
             if (wsCmd == null) { WebSocketCmd(); }
             //getCamerasList();
             getManagerData();
+            $.get('camera1.html', function (data) {
+                divNewCamera.innerHTML = data;
+                console.log(data);
+            });
         });
     </script>
 </head>
 <body>
     <div id="menu"></div>
     <h1 id="headMain"></h1>
-    <div id="content">
+    <div>
+        <div class="card">
+            <div class="card-body">
+                <b>Hardware status: </b>
+                <span class="badge badge-primary">CPU <span id="cpu">0</span>%</span>
+                <span class="badge badge-primary">CPU <span id="cpu_t">0</span>&deg;</span>
+                <span class="badge badge-primary">Mem <span id="mem_load">0</span>%</span>
+                <span class="badge badge-primary">Drive <span id="drive_free">0</span>GB</span>
+                <span class="badge badge-primary">GPU1 <span id="1gpu">0</span>%</span>
+                <span class="badge badge-primary">GPU1 <span id="1gpu_t">0</span>&deg;</span>
+                <span class="badge badge-primary">GPU1 <span id="1gpu_mem">0</span>GB</span>
+                <span class="badge badge-primary">GPU2 <span id="2gpu">0</span>%</span>
+                <span class="badge badge-primary">GPU2 <span id="2gpu_t">0</span>&deg;</span>
+                <span class="badge badge-primary">GPU2 <span id="2gpu_mem">0</span>%</span>
+            </div>
+        </div>
+        <br>
+        <div class="card">
+            <div class="card-header">Local file proceeding queue</div>
+            <div class="card-body">
+                <table class="table text-center">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">Path</th>
+                            <th scope="col">Size (MB)</th>
+                            <th scope="col">Done (%)</th>
+                            <th scope="col">Working (min)</th>
+                            <th scope="col">Finished in (min)</th>
+                            <th scope="col">Stop</th>
+                            <th scope="col">Up|Down</th>
+                            <th scope="col">Displey</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="0_'queue">
+                            <td id="0_queue_n">1</td>
+                            <td id="0_queue_path">39.avi</td>
+                            <td id="0_queue_size">0</td>
+                            <td>
+                                <div class="progress"><div id="0_queue_done" class="progress-bar" role="progressbar" style="width:10%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
+                                <!--
+                                $('0_queue_done').css('width', valeu+'%').attr('aria-valuenow', valeu);
+                             -->
+                            </td>
+                            <td id="0_queue_proceed">0</td>
+                            <td id="0_queue_finish">0</td>
+                            <td><a href="" style="color:red"><span class="fas fa-minus-circle"></span></a></td>
+                            <td><a href="" id="0queue_n"><span class="fas fa-chevron-up"></span></a>&nbsp;&nbsp;<a href=""><span class="fas fa-chevron-down"></span></a></a></td>
+                            <td>Show</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <br>
+        <div id="content">
 
-    </div>
-    <!-- Modal -->
-    <div class="modal fade" id="camModal" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="ModalDelete">Are you want delete camera config?</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
+        </div>
+        <!-- Modal -->
+        <div class="modal fade" id="camModal" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="ModalDelete">Are you want delete camera config?</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
 
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
-                    <button type="button" class="btn btn-danger" onclick="delCamera(); return false;">Delete</button>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
+                        <button type="button" class="btn btn-danger" onclick="delCamera(); return false;">Delete</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 </body>
 </html>

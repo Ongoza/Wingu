@@ -2,6 +2,94 @@
 // add move each new border a liitle right from prev
 // add possibility save and load borders templates
 
+var fileCurVideoFilePath = 'video/39.avi';
+// json data structure:  name, size in GB, creaction time
+var fileList = {};
+var fileBordersList = {};
+var fileImgs = {};
+
+function validedName() {
+    let input = $('#new_border_name');
+    let c = input.selectionStart, r = /[^a-zA-Z0-9_]/gi, v = input.val();
+    if (r.test(v)) {
+        input.val(v.replace(r, ''));
+        c--;
+    }
+}
+
+function showImgBorders() {
+    console.log(!(fileCurVideoFilePath in fileImgs), fileImgs);
+    if (!(fileCurVideoFilePath in fileImgs)) { getFileImgAjax(fileCurVideoFilePath); }
+    if (fileCurVideoFilePath in fileBordersList) {
+        drawBorders = fileBordersList[fileCurVideoFilePath];
+        for (var key in drawBorders) {
+            console.log(drawBorders[key]);
+            drawNewBorder(key, drawBorders[key]);
+        }
+        console.log(drawBorders);
+    }
+    $('#fileModalImg').modal('show');
+
+}
+function getFilesListAjax() {
+    var jqxhr = $.ajax("http://localhost:8080/filesList")
+        .done(function (data) {
+            console.log("success ajax", data);
+            try {
+                fileList = JSON.parse(data);
+                console.log("success ajax json", fileList);
+            } catch{
+                console.log("error ajax json!!!");
+            }
+            //data.files.forEach((row) => { addRow(row); });
+        })
+        .fail(function () { console.log("error get ajax"); })
+        .always(function () { console.log("complete ajax request"); });
+}
+
+
+function getFileImgAjax(filePath) {
+    var jqxhr = $.ajax({
+        url: "http://localhost:8080/getFileImg?file=" + filePath,
+        cache: false,
+        xhrFields: { responseType: 'blob' }
+    })
+        // xhr.overrideMimeType("text/plain; charset=x-user-defined");
+        .done(function (data) {
+            // console.log("success ajax", data);
+            var url = window.URL || window.webkitURL;
+            fileImgs[filePath] = url.createObjectURL(data);
+            $('#result_image').attr("src", fileImgs[filePath]);
+            $('#fileModalImgDiv').css("background-image", "url('" + fileImgs[filePath] + "')");
+        })
+        .fail(function () { console.log("error get ajax"); })
+        .always(function () { console.log("complete ajax request"); });
+}
+
+function fileSaveBorders() {
+    fileBordersList[fileCurVideoFilePath] = drawBorders;
+    console.log('fileSaveBorders', drawActiveBorder, fileBordersList);
+    $("#file_borders_number").val(Object.keys(drawBorders).length);
+
+}
+
+function fileCancelBorders() {
+    console.log('fileCancelBorders');
+    drawBorders = {};
+    drawActiveBorder = null;
+    $('#fileSvg').empty();
+    $('#fileSvg').empty();
+    $('#displayLineName').html('&nbsp;');
+    $('#dtVerticalScroll tbody').empty();
+}
+
+function addToQueue() {
+    if (parseInt($("#file_borders_number").val()) > 0) {
+        console.log("add to queue");
+    } else {
+        alert("Please add some borders!!!!");
+    }
+}
 
 var drawBorders = {};
 var drawActiveBorder = null;

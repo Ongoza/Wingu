@@ -1,204 +1,24 @@
-﻿<!--
-    TODO
-    окно добавляения локального файла для подсчета
-    принимает json от сервера со списком локальных видео файлов (папка ключ, массив video files only!!!)
-    примает  картинку из видеофайла от сервера
-    отображает картинку внизу панели о файле
-    опции
-        путь к файлу - сделать окно поиска
-        границы (загрузить из существующей камеры или создать новые)
-        опция: сохранять результируещее видео - путь, разрешение
--->
-
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>"Wingu"</title>
-    <link rel="icon" type="image/png" href="lib/favicon.png">
-    <script src="lib/jquery-3.5.1.min.js"></script>
-    <link href="lib/bootstrap.min.css" rel="stylesheet">
-    <link href="lib/flag-icon.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="lib/css/all.css">
-
-    <script src="lib/bootstrap.min.js"></script>
-    <!-- <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/css/flag-icon.min.css" rel="stylesheet">
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"></script> -->
-    <!-- <script src="js/websocket.js"></script> -->
-
-    <script src="js/nav.js"></script>
-    <script src="js/websocket.js"></script>
-    <script src="js/drawBorders.js"></script>
-    <style>
-        input:invalid {
-            border: 2px dashed red;
-        }
-
-        input:valid {
-            border: 2px solid black;
-        }
-    </style>
-    <script>
-        var fileCurVideoFilePath = 'video/39.avi';
-        // json data structure:  name, size in GB, creaction time
-        var fileList = {};
-        var fileBordersList = {};
-        var fileImgs = {};
-
-        function validedName() {
-            let input = $('#new_border_name');
-            let c = input.selectionStart, r = /[^a-zA-Z0-9_]/gi, v = input.val();
-            if (r.test(v)) {
-                input.val(v.replace(r, ''));
-                c--;
-            }
-        }
-
-        function showImgBorders() {
-            console.log(!(fileCurVideoFilePath in fileImgs), fileImgs);
-            if (!(fileCurVideoFilePath in fileImgs)) { getFileImgAjax(fileCurVideoFilePath); }
-            if (fileCurVideoFilePath in fileBordersList) {
-                drawBorders = fileBordersList[fileCurVideoFilePath];
-                for (var key in drawBorders) {
-                    console.log(drawBorders[key]);
-                    drawNewBorder(key, drawBorders[key]);
-                }
-                console.log(drawBorders);
-            }
-            $('#fileModalImg').modal('show');
-
-        }
-        function getFilesListAjax() {
-            var jqxhr = $.ajax("http://localhost:8080/filesList")
-                .done(function (data) {
-                    console.log("success ajax", data);
-                    try {
-                        fileList = JSON.parse(data);
-                        console.log("success ajax json", fileList);
-                    } catch{
-                        console.log("error ajax json!!!");
-                    }
-                    //data.files.forEach((row) => { addRow(row); });
-                })
-                .fail(function () { console.log("error get ajax"); })
-                .always(function () { console.log("complete ajax request"); });
-        }
-
-
-        function getFileImgAjax(filePath) {
-            var jqxhr = $.ajax({
-                url: "http://localhost:8080/getFileImg?file=" + filePath,
-                cache: false,
-                xhrFields: { responseType: 'blob' }
-            })
-                // xhr.overrideMimeType("text/plain; charset=x-user-defined");
-                .done(function (data) {
-                    // console.log("success ajax", data);
-                    var url = window.URL || window.webkitURL;
-                    fileImgs[filePath] = url.createObjectURL(data);
-                    $('#result_image').attr("src", fileImgs[filePath]);
-                    $('#fileModalImgDiv').css("background-image", "url('" + fileImgs[filePath] + "')");
-                })
-                .fail(function () { console.log("error get ajax"); })
-                .always(function () { console.log("complete ajax request"); });
-        }
-
-        function fileSaveBorders() {
-            fileBordersList[fileCurVideoFilePath] = drawBorders;
-            console.log('fileSaveBorders', drawActiveBorder, fileBordersList);
-            $("#file_borders_number").val(Object.keys(drawBorders).length);
-
-        }
-
-        function fileCancelBorders() {
-            console.log('fileCancelBorders');
-            drawBorders = {};
-            drawActiveBorder = null;
-            $('#fileSvg').empty();
-            $('#fileSvg').empty();
-            $('#displayLineName').html('&nbsp;');
-            $('#dtVerticalScroll tbody').empty();
-        }
-
-        function addToQueue() {
-            if (parseInt($("#file_borders_number").val()) > 0) {
-                console.log("add to queue");
-            } else {
-                alert("Please add some borders!!!!");
-            }
-        }
-
-        $(document).ready(function () {
-            //getFileImgAjax(fileVideoFilePath);
-            //if (wsCmd == null) { WebSocketCmd(); }
-            //getFileImg('video/39.avi');
-            //$('#fileModalImg').modal('show');
-            showImgBorders();
-        });
-    </script>
-</head>
-<body>
-    <div id="menu"></div>
-    <h1 id="headMain"></h1>
-
-    <div class="container">
-        <div class="card">
-            <div class="card-body">
-                <b>Hardware status: </b>
-                <span class="badge badge-primary">CPU <span id="cpu">0</span>%</span>
-                <span class="badge badge-primary">CPU <span id="cpu_t">0</span>&deg;</span>
-                <span class="badge badge-primary">Mem <span id="mem_load">0</span>%</span>
-                <span class="badge badge-primary">Drive <span id="drive_free">0</span>GB</span>
-                <span class="badge badge-primary">GPU1 <span id="1gpu">0</span>%</span>
-                <span class="badge badge-primary">GPU1 <span id="1gpu_t">0</span>&deg;</span>
-                <span class="badge badge-primary">GPU1 <span id="1gpu_mem">0</span>GB</span>
-                <span class="badge badge-primary">GPU2 <span id="2gpu">0</span>%</span>
-                <span class="badge badge-primary">GPU2 <span id="2gpu_t">0</span>&deg;</span>
-                <span class="badge badge-primary">GPU2 <span id="2gpu_mem">0</span>%</span>
-            </div>
-        </div>
-        <br>
-        <div class="card">
-            <div class="card-header">Local file proceeding queue</div>
-            <div class="card-body">
-                <table class="table text-center">
-                    <thead class="thead-dark">
-                        <tr>
-                            <th scope="col">#</th>
-                            <th scope="col">Path</th>
-                            <th scope="col">Size (MB)</th>
-                            <th scope="col">Done (%)</th>
-                            <th scope="col">Working (min)</th>
-                            <th scope="col">Finished in (min)</th>
-                            <th scope="col">Stop</th>
-                            <th scope="col">Up|Down</th>
-                            <th scope="col">Displey</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr id="0_'queue">
-                            <td id="0_queue_n">1</td>
-                            <td id="0_queue_path">39.avi</td>
-                            <td id="0_queue_size">0</td>
-                            <td>
-                                <div class="progress"><div id="0_queue_done" class="progress-bar" role="progressbar" style="width:10%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
-                                <!--
-                                    $('0_queue_done').css('width', valeu+'%').attr('aria-valuenow', valeu);
-                                 -->
-                            </td>
-                            <td id="0_queue_proceed">0</td>
-                            <td id="0_queue_finish">0</td>
-                            <td><a href="" style="color:red"><span class="fas fa-minus-circle"></span></a></td>
-                            <td><a href="" id="0queue_n"><span class="fas fa-chevron-up"></span></a>&nbsp;&nbsp;<a href=""><span class="fas fa-chevron-down"></span></a></a></td>
-                            <td>Show</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <br>
-        <div>
+﻿<!--//'39':
+// { 'id': 'test00',
+//   'uid': 'lynE3ce',
+// 'url': 'video/39.avi',
+// 'isFromFile': True,
+// 'save_path': 'video/39_out.avi',
+// 'body_min_w': 64,
+// 'path_track': 20,
+// 'body_res': [256, 128],
+// 'display_video_flag': True,
+// 'max_cosine_distance': 0.2,
+// 'save_video_flag': True,
+// 'skip_frames': 0,
+// 'encoder_filename': 'mars-small128.pb',
+// 'batch_size': 32,
+// 'img_size_start': [1600, 1200],
+// 'save_video_res': [720, 540],
+// 'borders': { 'border1': [[0, 104], [312, 104]] } }-->
+<div>
+    <div>
+        <div class="container2">
 
             <div class="card  mb-14">
                 <div class="row justify-content-md-center">
@@ -266,108 +86,112 @@
             </div>
         </div>
     </div>
+</div>
+<br>
+<br>
+<br>
+<!-- Modal select file-->
+<div class="modal fade" id="fileModalName" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ModalDelete">Are you want delete camera config?</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body">
 
-    </div>
-    <br><br><br>
-    <!-- Modal select file-->
-    <div class="modal fade" id="fileModalName" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="ModalDelete">Are you want delete camera config?</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                </div>
-                <div class="modal-body">
-
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
-                    <button type="button" class="btn btn-danger" onclick="delCamera(); return false;">Delete</button>
-                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
+                <button type="button" class="btn btn-danger" onclick="delCamera(); return false;">Delete</button>
             </div>
         </div>
     </div>
-    <!-- Modal draw borders-->
-    <div class="modal fade" id="fileModalImg" tabindex="-1" role="dialog" aria-labelledby="ModalDrawBorders" aria-hidden="true">
-        <div class="modal-dialog" style="max-width: 1200px!important;" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="fileModalImg">Draw borders</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="fileCancelBorders(); return false;">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div class="container-fluid">
-                        <div class="row">
-                            <div id="fileModalImgDiv" style="display:flex;width:644px; height:484px;margin:auto;border:2px solid #00ffff;background-image:url('');background-repeat:no-repeat;">
-                                <svg id="fileSvg" style="border:1px solid black;z-index:9;" width="640" height="480" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg" onload="makeDraggable(evt)"></svg>
-                            </div>
+</div>
+<!-- Modal draw borders-->
+<div class="modal fade" id="fileModalImg" tabindex="-1" role="dialog" aria-labelledby="ModalDrawBorders" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 1200px!important;" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="fileModalImg">Draw borders</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="fileCancelBorders(); return false;">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="container-fluid">
+                    <div class="row">
+                        <div id="fileModalImgDiv" style="display:flex;width:644px; height:484px;margin:auto;border:2px solid #00ffff;background-image:url('');background-repeat:no-repeat;">
+                            <svg id="fileSvg" style="border:1px solid black;z-index:9;" width="640" height="480" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg" onload="makeDraggable(evt)"></svg>
+                        </div>
 
-                            <div class="col-sm-4">
-                                <div style=" align-items:flex-start; border: 1px solid black; display: flex; justify-content: left; height: 480px; position: relative;">
-                                    <div id="content" style="width:100%;">
-                                        <div class="col-sm-auto card-title bg-secondary text-white" style="margin-right: 0px; ">Add a border to the video</div>
-                                        <section style="margin: 15px;">
-                                            <button type="button" class="btn btn-primary" onclick="$('#new_border_name').val('border_'+Object.keys(drawBorders).length);$('#borderModalName').modal('show'); return false;"> Add new border</button><span style="color:red;">&nbsp;&nbsp;<b>Direction: <span style="color:green">green</span>->red</b></span>
-                                            <div>
-                                                <b>Current border name: </b>
-                                                <div style=" display: inline-block; ">
-                                                    <span id="displayLineName" style="border: 1px solid black; width: 100px; display: inline-block; ">&nbsp;</span>
-                                                    <button type="button" class="btn btn-danger btn-sm" onclick="delActiveBorder();">Del</button>
-                                                </div>
+                        <div class="col-sm-4">
+                            <div style=" align-items:flex-start; border: 1px solid black; display: flex; justify-content: left; height: 480px; position: relative;">
+                                <div id="content" style="width:100%;">
+                                    <div class="col-sm-auto card-title bg-secondary text-white" style="margin-right: 0px; ">Add a border to the video</div>
+                                    <section style="margin: 15px;">
+                                        <button type="button" class="btn btn-primary" onclick="$('#new_border_name').val('border_'+Object.keys(drawBorders).length);$('#borderModalName').modal('show'); return false;"> Add new border</button><span style="color:red;">&nbsp;&nbsp;<b>Direction: <span style="color:green">green</span>->red</b></span>
+                                        <div>
+                                            <b>Current border name: </b>
+                                            <div style=" display: inline-block; ">
+                                                <span id="displayLineName" style="border: 1px solid black; width: 100px; display: inline-block; ">&nbsp;</span>
+                                                <button type="button" class="btn btn-danger btn-sm" onclick="delActiveBorder();">Del</button>
                                             </div>
-                                            <div><h4>Borders list</h4></div>
+                                        </div>
+                                        <div><h4>Borders list</h4></div>
 
-                                            <div id="dtVerticalScroll_wrapper" class="dataTables_wrapper dt-bootstrap4">
-                                                <div class="dataTables_scrollBody" style="position: relative; overflow: auto; max-height: 250px; width: 100%;">
-                                                    <table id="dtVerticalScroll" class="table table-striped table-bordered table-sm my-custom-scrollbar dataTable" cellspacing="0" width="100%" role="grid" aria-describedby="dtVerticalScroll_info" style="width: 100%;">
-                                                        <thead>
-                                                            <tr role="row" style=" height: 0px;">
-                                                                <th class="th-sm sorting_asc" aria-controls="dtVerticalScroll" rowspan="1" colspan="1" style="height: 0px; width: 75px; padding-top: 0px; padding-bottom: 0px; border-top-width: 0px; border-bottom-width: 0px;" aria-sort="ascending" aria-label="Name: activate to sort column descending">
-                                                                    <div class="dataTables_sizing" style="height: 0px; overflow: hidden;"> Name</div>
-                                                                </th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody></tbody>
-                                                    </table>
-                                                </div>
-                                                <br>
-                                                <div style="margin-top:15px;">
-                                                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="fileCancelBorders(); return false;">Close</button>
-                                                    <button type="button" class="btn btn-danger" onclick="fileSaveBorders(); return false;">Save</button>
-                                                </div>
+                                        <div id="dtVerticalScroll_wrapper" class="dataTables_wrapper dt-bootstrap4">
+                                            <div class="dataTables_scrollBody" style="position: relative; overflow: auto; max-height: 250px; width: 100%;">
+                                                <table id="dtVerticalScroll" class="table table-striped table-bordered table-sm my-custom-scrollbar dataTable" cellspacing="0" width="100%" role="grid" aria-describedby="dtVerticalScroll_info" style="width: 100%;">
+                                                    <thead>
+                                                        <tr role="row" style=" height: 0px;">
+                                                            <th class="th-sm sorting_asc" aria-controls="dtVerticalScroll" rowspan="1" colspan="1" style="height: 0px; width: 75px; padding-top: 0px; padding-bottom: 0px; border-top-width: 0px; border-bottom-width: 0px;" aria-sort="ascending" aria-label="Name: activate to sort column descending">
+                                                                <div class="dataTables_sizing" style="height: 0px; overflow: hidden;"> Name</div>
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody></tbody>
+                                                </table>
                                             </div>
-                                        </section>
-                                    </div>
-
+                                            <br>
+                                            <div style="margin-top:15px;">
+                                                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="fileCancelBorders(); return false;">Close</button>
+                                                <button type="button" class="btn btn-danger" onclick="fileSaveBorders(); return false;">Save</button>
+                                            </div>
+                                        </div>
+                                    </section>
                                 </div>
 
                             </div>
+
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="modal fade" id="borderModalName" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="ModalDelete">Please give a name for border</h5> 
-                    <span style="color:red">(only Latin signs!)</span>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+</div>
+<div class="modal fade" id="borderModalName" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ModalDelete">Please give a name for border</h5>
+                <span style="color:red">(only Latin signs!)</span>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
             </div>
-                <div class="modal-body">
-                    <input type="text" id="new_border_name" class="form-control" oninput="validedName();" required pattern="[A-Za-z0-9.-_]" value="" />
-                    <span class="invalid-feedback">Required</span>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
-                    <button type="button" class="btn btn-danger" onclick="addNewBorder($('#new_border_name').val()); return false;">Create border</button>
-                </div>
+            <div class="modal-body">
+                <input type="text" id="new_border_name" class="form-control" oninput="validedName();" required pattern="[A-Za-z0-9.-_]" value="" />
+                <span class="invalid-feedback">Required</span>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Skip</button>
+                <button type="button" class="btn btn-danger" onclick="addNewBorder($('#new_border_name').val()); return false;">Create border</button>
             </div>
         </div>
     </div>
-</body>
-</html>
+</div>
+<div class="btn-group" role="group" aria-label="Save data">
+    <button type="button" class="btn btn-secondary" onclick="showCamList();return false;">Skip&Back</button>
+    <button type="button" class="btn btn-secondary" onclick="confCamera();return false;">Undo</button>
+    <button type="button" class="btn btn-secondary" onclick="saveCamera();return false;">Save&Back</button>
+</div>
