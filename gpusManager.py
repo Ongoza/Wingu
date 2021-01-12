@@ -4,7 +4,7 @@ import os, sys, traceback, time
 import queue, threading
 
 import logging
-
+import numpy as np
 import tensorflow as tf
 import yaml
 import cv2
@@ -17,7 +17,10 @@ class Manager(threading.Thread):
     def __init__(self, configFileName):
         threading.Thread.__init__(self)
         self.gpusActiveList = {}  # running devices
+        self.arr_symb = np.fromstring('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', dtype=np.uint8)
         self.gpusList = [] # available devices
+        self.gpusConfigList = {} # available devices
+        self.streamsConfigList = {} # available devices
         self.camsList = {} # available cams on gpus
         self.log = logging.getLogger('app')
         self.log.setLevel(logging.DEBUG)
@@ -26,36 +29,72 @@ class Manager(threading.Thread):
         ch.setLevel(logging.DEBUG)
         ch.setFormatter(f)
         self.log.addHandler(ch)
-
         self.isGPU = False
+        self.isGpuStarted = False
         try:
-            with open(os.path.join('config', configFileName+'.yaml')) as f:    
-                self.config = yaml.load(f, Loader=yaml.FullLoader) 
-            print("gpus manager config", self.config)
-            gpus = tf.config.experimental.list_physical_devices('GPU')
-            if gpus:
-                self.isGPU = True
-                nvidia_smi.nvmlInit()
-                if len(gpus) >= len(self.config['gpus_configs_list']):
-                    for key in self.config['gpus_configs_list'].keys():               
-                        self.gpusList.append(gpus[key].name)                        
-                        if key in self.config['gpus_list_active']:
-                            self.startGpu(self.config['gpus_configs_list'][key])
-                    time.sleep(2)                        
+            self.config = self.loadConfig(configFileName, 'Gpus_manager_')
+            if self.config:
+                self.config['gpu_configs'] = {}
+                self.config['streams_configs'] = {}
+                print("gpus manager config", self.config)
+                gpus = tf.config.experimental.list_physical_devices('GPU')
+                if gpus:
+                    self.isGPU = True
+                    nvidia_smi.nvmlInit()
+                    if len(gpus) >= len(self.config['gpus_configs_list']):
+                        for key in self.config['gpus_configs_list'].keys():
+                            key = str(key)
+                            self.gpusList.append(gpus[key].name)
+                            cfg = self.loadConfig(['gpus_configs_list'][key], "Gpu_")
+                            if cfg:
+                                self.gpusConfigList['Gpu_'+key] = cfg
+                                if key in self.config['autostart_gpus_list']:
+                                    self.startGpu(self.config['gpus_configs_list'][key])
+                                    time.sleep(3)                        
+                else:
+                    self.gpusList.append("CPU")  # Init for CPU
+                    cfg = self.loadConfig(self.config['cpu_config'], "GPU_")
+                    if cfg:
+                        self.gpusConfigList['cpu'] = cfg
+                        if self.config['autostart_gpus_list'] != None:
+                            self.startGpu(cfg)
+                            time.sleep(3)
+                self.log.debug("Active GPUs list: "+" ".join(self.gpusActiveList.keys()))
+                for stream in self.config['streams']:
+                    stream = str (stream)
+                    cfg = self.loadConfig(stream, "Stream_")
+                    if cfg:
+                        self.streamsConfigList[stream] = cfg
+                        if self.config['autotart_streams']:
+                            self.log.debug("try to autostart "+ stream)
+                            self.startStream(stream)
             else:
-                self.gpusList.append("CPU")  # Init for CPU
-                if self.config['gpus_list_active']:
-                    self.startGpu(self.config['cpu_config'])
-            time.sleep(5)
-            self.log.debug("Active GPUs list: "+" ".join(self.gpusActiveList.keys()))
-            if self.config['autotart_streams']:
-                for stream in self.config['autotart_streams']:
-                    self.log.debug("try to autostart "+ stream)
-                    self.startStream(stream)
+                self.log.error("Can not load config gor GPUs Maanger")
+                raise
         except:
             self.log.error("Can not start gpus manager")
             print(sys.exc_info())
             self.kill()            
+
+    def loadConfig(self, fileName, tp):
+        res = None
+        fileName = os.path.join('config', tp + str(fileName)+'.yaml')
+        print("fileName", fileName)
+        if os.path.isfile(fileName):
+            try:
+                with open(fileName, encoding='utf-8') as f:    
+                    res = yaml.load(f, Loader=yaml.FullLoader)
+            except:
+                self.log.error("Can not load config for " + fileName )
+        return res
+
+    def getConfig(self):
+        #np.append(uid, np.uint8(device_id))
+        return {'managerConfig':self.config, 'gpusConfigList':self.gpusConfigList, 'streamsConfigList': self.streamsConfigList}
+
+    def createUid(self):
+        #np.append(uid, np.uint8(device_id))
+        return np.random.choice(arr_symb, 7)
 
     def getHardwareStatus(self):
         res = {}
@@ -179,15 +218,13 @@ class Manager(threading.Thread):
 
 
 if __name__ == "__main__":
-    manager = Manager("Gpus_manager_default")
+    manager = Manager("default")
     time.sleep(10)
-    gpu_keys = manager.getActiveGpusList()
-    gpu = manager.gpusActiveList[gpu_keys[0]]
-    print("GPU", " ".join(gpu_keys))
-    # print("gpu.cams[0]", gpu.cams[0].id)
-    # manager.startStream(""
-    # )
-    while True:
+    if manager:
+        print("GPUs:", " ".join(manager.gpusList))
+    print(manager.getConfig())
+    # manager.startStream("39")
+    while False:
         time.sleep(3)
         log.debug("tik")
         try:
@@ -207,9 +244,10 @@ if __name__ == "__main__":
             log.error("try to stop by exception")
             manager.kill()
             break
-    manager.kill()    
+    if manager:
+        manager.kill()    
     cv2.destroyAllWindows()
-    log.debug("Stoped - OK")
+    print("Stoped - OK")
 
    
    

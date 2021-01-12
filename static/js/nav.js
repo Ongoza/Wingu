@@ -20,7 +20,7 @@ var langText = {
 
 const divNav = `
        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-            <a class="navbar-brand" href="#">WihguMain</a>
+            <a class="navbar-brand" href="#">Wihgu:Main</a>
             <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarColor01" aria-controls="navbarColor01" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -29,7 +29,7 @@ const divNav = `
                 <ul class="navbar-nav mr-auto">
                     <li class="nav-item" id='menu_index'><a class="nav-link text" onclick="doMenu(this.id)" href="#" id='index'><span class="sr-only">(current)</span></a></li>
                     <li class="nav-item" id='menu_cameras'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='cameras'></a></li>
-                    <li class="nav-item" id='menu_file'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='file'></a></li>
+                    
                     <li class="nav-item" id='menu_server'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='server'></a></li>
                     <li class="nav-item" id='menu_config'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='config'></a></li>
                     <li class="nav-item" id='menu_log'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='log'></a></li>
@@ -53,48 +53,57 @@ const divNav = `
             </div>
         </nav>
   `;
- 
-  function translate(){
-            $(".text").each(function(index) {
-                $(this).text(langText[$(this)[0].id][curLang]);
-            });
-            $('#headMain').text(langText[curId][curLang])
-        }
+
+// <li class="nav-item" id='menu_file'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='file'></a></li>
+
+function translate() {
+    console.log("translate", curLang, curId )
+    if (langText.hasOwnProperty(curId)) {
+        $(".text").each(function (index) {
+            $(this).text(langText[$(this)[0].id][curLang]);
+        });
+        // console.log("translate",langText[curId][curLang]);
+        $('#headMain').text(langText[curId][curLang])
+    } else {
+        console.log("translate", curLang, curId);
+    }
+  }
         
   function doMenu(id){
-            // console.log("Click event is triggered on the link.", id, window.location.href);
-            window.location.href = id+".html";
-            localStorage.setItem('myId', id);
-        }
+        // console.log("Click event is triggered on the link.", id, window.location.href);
+        window.location.href = id+".html";
+        localStorage.setItem('myId', id);
+    }
         
   function doSignOut(){
-            $.post('/sign/1', {'login': ''}, function(data){
-                console.log(data);
-                if (data.error){showError(data.error)
-                }else{
-                console.log("redirect to root.")
-                window.location.href = '/'}
-            });
-        }
+        $.post('/sign/1', {'login': ''}, function(data){
+            console.log(data);
+            if (data.error){showError(data.error)
+            }else{
+            console.log("redirect to root.")
+            window.location.href = '/'}
+        });
+    }
 
 $(document).ready(function() {
-        if(localStorage.getItem('myLang') != null ){ curLang = localStorage.getItem('myLang');}
-        if(localStorage.getItem('myId') != null ){ curId = localStorage.getItem('myId');}
-        console.log("Start main page "+curId);
-        const navigation = document.createElement('div');
-        navigation.className = 'menuContent';
-        navigation.innerHTML = divNav;           
-        $('#menu').append(navigation);
-        $("#langSwitch").html('<span class="flag-icon flag-icon-'+curLang+'"></span>'+curLang);
-        $('#menu_'+curId).addClass("active");
-        translate();
-        // $("#menu_Home").text("ffff");
-        $("#dropdown-menu-lang").on('click', 'a', function(){
-                curLang =  $(this)[0].id;
-                // console.log($("#dropdown").text());
-                $("#langSwitch").html('<span class="flag-icon flag-icon-'+curLang+'"></span>'+curLang);
-                localStorage.setItem('myLang', curLang);
-                translate();
-            });
-        
+    if(localStorage.getItem('myLang') != null ){ curLang = localStorage.getItem('myLang');}
+    if(localStorage.getItem('myId') != null ){ curId = localStorage.getItem('myId');}
+    console.log("Start main page "+curId);
+    const navigation = document.createElement('div');
+    navigation.className = 'menuContent';
+    navigation.innerHTML = divNav;           
+    $('#menu').append(navigation);
+    $("#langSwitch").html('<span class="flag-icon flag-icon-'+curLang+'"></span>'+curLang);
+    $('#menu_' + curId).addClass("active");
+    console.log("Start page ", curId, curLang);
+    translate();
+    // $("#menu_Home").text("ffff");
+    $("#dropdown-menu-lang").on('click', 'a', function(){
+            curLang =  $(this)[0].id;
+            // console.log($("#dropdown").text());
+            $("#langSwitch").html('<span class="flag-icon flag-icon-'+curLang+'"></span>'+curLang);
+            localStorage.setItem('myLang', curLang);
+            translate();
         });
+        
+    });

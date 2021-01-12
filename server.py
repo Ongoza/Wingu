@@ -6,7 +6,7 @@ import asyncio
 # import aiohttp_debugtoolbar
 from aiohttp_session import session_middleware
 # from aiohttp_session.cookie_storage import EncryptedCookieStorage
-
+import numpy as np
 from aiohttp import web, WSMsgType
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict
 import aiosqlite
@@ -30,7 +30,7 @@ import time
 
 #import camera
 import gpusManager
-
+managerConfigFile = "default" 
 log = logging.getLogger('app')
 log.setLevel(logging.DEBUG)
 f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
@@ -40,11 +40,16 @@ ch.setFormatter(f)
 log.addHandler(ch)
 camerasListData = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
 
+test_manager_config = {'managerConfig': {'cpu_config': 0, 'autostart_gpus_list': None, 'gpus_configs_list': [0, 1], 'autotart_streams': None, 'streams': [39, 43], 'gpu_configs': {}, 'streams_configs': {}}, 
+                       'gpusConfigList': {'cpu': {'id': 'gpu_0', 'batch_size': 32, 'img_size': 416, 'detector_name': 'yolov4', 'detector_filename': 'yolov4.h5', 'yolo_max_boxes': 100, 'yolo_iou_threshold': 0.5, 'yolo_score_threshold': 0.5}}, 
+                       'streamsConfigList': {'39': {'id': 'test00', 'uid': 'lynE3ce', 'url': 'video/39.avi', 'isFromFile': True, 'save_path': 'video/39_out.avi', 'body_min_w': 64, 'path_track': 20, 'body_res': [256, 128], 'display_video_flag': True, 'max_cosine_distance': 0.2, 'save_video_flag': True, 'skip_frames': 0, 'encoder_filename': 'mars-small128.pb', 'batch_size': 32, 'img_size_start': [1600, 1200], 'save_video_res': [720, 540],
+                            'borders': {'border1': [[0, 104], [312, 104]]}}, '43': {'id': 'test01', 'url': 'video/43.avi', 'isFromFile': True, 'save_path': 'video/43_out.avi', 'body_min_w': 64, 'path_track': 20, 'body_res': [256, 128], 'display_video_flag': True, 'max_cosine_distance': 0.2, 'save_video_flag': True, 'skip_frames': 2, 'encoder_filename': 'mars-small128.pb', 'batch_size': 32, 'img_size_start': [1600, 1200], 'save_video_res': [720, 540], 'borders': {'border1': [[0, 104], [312, 104]]}}}}
+
 async def camerasList(request):
     data = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
     return  web.json_response(data)
 
-async def filesList(request):
+async def getFilesList(request):
     #params = request.rel_url.query
     #print(params)
     #print(params['file_1'])
@@ -52,9 +57,14 @@ async def filesList(request):
     data = {'files':{'39.avi':[0.4,'20.10.2020'], 'new':{'45.avi':[0.4,'20.10.2020']}}};
     return  web.json_response(data)
 
+async def saveConfig(request):
+    msg_json = json.loads('data from post')
+    print(msg_json)
+    return  web.json_response({'answer':['saveConfig','ok',request]})
+
 async def addToQueue(request):
     msg_json = json.loads('data from post')
-
+    print(msg_json)
     return  web.json_response({'answer':['addToQueue','ok',request]})
 
 async def getFileImg(request):
@@ -62,12 +72,14 @@ async def getFileImg(request):
         print("start getFileImag")
         if ('file' in request.rel_url.query):
             fileName = request.rel_url.query['file']
-            print("filaName",fileName) #'video/39.avi'            
+            print("filaName", fileName) #'video/39.avi'            
             if os.path.isfile(fileName):
                 vidcap = cv2.VideoCapture(fileName)
                 img = vidcap.read()[1]
                 img = cv2.resize(img, (640,480), interpolation = cv2.INTER_AREA)
                 res = cv2.imencode('.JPEG', img)[1].tobytes()
+                #exif_dict = piexif.load(res.info['exif'])
+                #print("res", exif_dict)
                 #return web.Response(text="All right!")
                 return web.Response(body=res)
             else:
@@ -80,7 +92,7 @@ async def getFileImg(request):
         await web.json_response({'error':[fileName,"can not open file"]})
 
 async def Index(request):
-    return web.HTTPFound('static/testVideo.html')
+    return web.HTTPFound('static/cameras.html')
 
 async def WebSocketCmd(request):
     ws = web.WebSocketResponse()
@@ -96,20 +108,37 @@ async def WebSocketCmd(request):
                 print("json=", type(msg_json), msg_json['cmd'])
                 if msg_json['cmd'] == 'close':
                     await ws.close()
+                elif msg_json['cmd'] == 'getManagerData':
+                    if True:
+                    # if "manager" in app:
+                        # data = app["manager"].getConfig()
+                        print("test_manager_config")
+                        data = test_manager_config
+                        # print("data", data)
+                        await ws.send_json(data)
+                    else:
+                        print(sys.exc_info())
+                        await ws.send_json({'error':['getManagerData', msg.data]})
                 elif msg_json['cmd'] == 'getCameras':
                     # print(camerasListData)
                     await ws.send_json(camerasListData)
-                elif msg_json['cmd'] == 'getFileImag':
+                elif msg_json['cmd'] == 'getFileImg':
                     print("testImg")
+                    #arr_symb = np.fromstring('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', dtype=np.uint8)
+                    #uid_g = np.append(np.random.choice(arr_symb, 7), np.uint8(1))
                     img = cv2.imread('video/cars.jpg')
-                    print("img", len(img))
-                    res = cv2.imencode('.jpg', img)[1].tobytes()
-                    print("res", len(res))
-                    cv2.imwrite("video/dd.jpg", img)
-                    await ws.send_bytes(res)
+                    res = cv2.imencode('.jpg', img)[1]
+                    uid_g = np.array([78, 55, 68, 79, 114, 97, 114, 1], dtype=np.uint8)
+                    # N7DOrar
+                    res = np.append(res, uid_g)
+                    #data = np.array([1,2], dtype=np.uint8)
+                    #res = np.concatenate(res, data)
+                    # print("res",type(res), res.dtype, res.size, uid_g, res[-8:])
+                    # cv2.imwrite("video/dd.jpg", img)
+                    await ws.send_bytes(res.tobytes())
                 else:
                     print("error websocket command")
-                    await ws.send_json({'error':{'unknown', msg.data}})
+                    await ws.send_json({'error':['unknown', msg.data]})
             except:
                 print(sys.exc_info())
                 await ws.send_json({'error':["can not parse json", msg.data]})
@@ -128,16 +157,22 @@ routes = [
     # ('POST', '/sign/{action}',  Sign,    'sign'),
     ('GET',  '/camerasList', camerasList),
     ('GET',  '/getFileImg', getFileImg),
-    ('GET',  '/filesList', filesList),
+    ('GET',  '/filesList', getFilesList),
     ('POST',  '/addToQueue', addToQueue),
+    ('POST',  '/saveConfig', saveConfig),
 
 ]
 
 async def on_shutdown(app):
-    for ws in app['websockets']:
-        await ws.close(code=1001, message='Server shutdown')
-    for ws in app['websocketscmd']:
-        await ws.close(code=1001, message='Server shutdown')
+    try:
+        if  'websockets' in app:
+            for ws in app['websockets']:
+                await ws.close(code=1001, message='Server shutdown')
+        if  'websocketscmd' in app:
+            for ws in app['websocketscmd']:
+                await ws.close(code=1001, message='Server shutdown')
+    except:
+        print(sys.exc_info())
 # print("SECRET_KEY", SECRET_KEY)
 #middle = [
 #    session_middleware(EncryptedCookieStorage(hashlib.sha256(bytes(settings.SECRET_KEY, 'utf-8')).digest())),
@@ -232,8 +267,8 @@ app['websocketscmd'] = set()
 #  start cameras manager Object
 print("starting GPU manager")
 # app['manager'] = set()
-# app['manager'] = gpusManager.Manager("Gpus_manager_default")
-# time.sleep(10)
+#app['manager'] = gpusManager.Manager(managerConfigFile)
+#time.sleep(10)
 
 # manager.daemon = True
 log.info('Running...')
@@ -242,3 +277,4 @@ web.run_app(app)
 if 'manager' in app:
     app['manager'].kill()
 log.info('The server stopped!')
+# print(sys.exc_info())

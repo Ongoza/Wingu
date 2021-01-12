@@ -18,17 +18,26 @@ function WebSocketCmd() {
 				
                wsCmd.onmessage = function (evt) { 
                   // var received_msg = evt.data;
-                  console.log("Message is received: ", evt.data);
+                  console.log("Message is received!");
                    try {
                        if (evt.data instanceof Blob) {
-                            console.log("Binary data!")
-                           putFrame(URL.createObjectURL(evt.data));
+                           //console.log("Binary data!");
+                           putFrame(evt.data);
                        } else {
                           let jsonData = JSON.parse(evt.data);
                           console.log("Message is received: ", jsonData);
-                          if (jsonData.hasOwnProperty('cameras')) {
-                              console.log("cameras list updating...");
-                              jsonData.cameras.forEach((row) => { addRow(row); });
+                           if (jsonData.hasOwnProperty('streamsConfigList')) {
+                               console.log("cameras list updating...");
+                               localStorage.setItem('streamsConfigList', JSON.stringify(jsonData['streamsConfigList']));
+                               configViewUpdate('streamsConfigList');                                 
+                           } else if (jsonData.hasOwnProperty('gpusConfigList')) {
+                                   console.log("cameras list updating...");
+                               localStorage.setItem('gpusConfigList', JSON.stringify(jsonData['gpusConfigList']));
+                               configViewUpdate('gpusConfigList');                                 
+                           } else if (jsonData.hasOwnProperty('managerConfig')) {
+                              console.log("!!!managerConfig data updating...", jsonData);
+                              localStorage.setItem('managerConfig', JSON.stringify(jsonData['managerConfig']));
+                               configViewUpdate('managerConfig');                                 
                           } else if (jsonData.hasOwnProperty('camera')) {
                               console.log("!!!camera data updating...", jsonData);
                           } else {

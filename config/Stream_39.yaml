@@ -1,4 +1,5 @@
-id: test00
+﻿id: test00
+uid: lynE3ce
 url: video/39.avi
 isFromFile: true
 save_path: video/39_out.avi
@@ -25,3 +26,5 @@ borders:
     - 104
   - - 312
     - 104
+comments:
+    привет!!!!
