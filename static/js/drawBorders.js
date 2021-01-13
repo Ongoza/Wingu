@@ -100,7 +100,7 @@ function fileSaveBorders() {
     };
     streamsConfigList[curCamId]['borders'] = drawBorders;
     localStorage.setItem('streamsConfigList', JSON.stringify(streamsConfigList));
-    $("#file_borders_number").val(Object.keys(drawBorders).length);
+    $('#addStream_borders_number').val(Object.keys(streamsConfigList[curCamId]['borders']).length);
 }
 
 function fileCancelBorders() {
@@ -144,7 +144,7 @@ function saveToServer() {
             }
         }
         //for (var key in defaultConfig) {
-        console.log("$('#addStream_isFromFile').val()", $('#addStream_isFromFile').prop('checked'))
+        // console.log("$('#addStream_isFromFile').val()", $('#addStream_isFromFile').prop('checked'))
         defaultConfig['id'] = $('#addStream_id').val();
         defaultConfig['name'] = $('#addStream_name').val();
         defaultConfig['url'] = $('#addStream_url').val();
