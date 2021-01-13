@@ -2,94 +2,12 @@
 // add move each new border a liitle right from prev
 // add possibility save and load borders templates
 
-var fileCurVideoFilePath = 'video/39.avi';
+// var fileCurVideoFilePath = 'video/39.avi';
 // json data structure:  name, size in GB, creaction time
-var fileList = {};
-var fileBordersList = {};
+// var fileList = {};
+// var fileBordersList = {};
+
 var fileImgs = {};
-
-function validedName() {
-    let input = $('#new_border_name');
-    let c = input.selectionStart, r = /[^a-zA-Z0-9_]/gi, v = input.val();
-    if (r.test(v)) {
-        input.val(v.replace(r, ''));
-        c--;
-    }
-}
-
-function showImgBorders() {
-    console.log(!(fileCurVideoFilePath in fileImgs), fileImgs);
-    if (!(fileCurVideoFilePath in fileImgs)) { getFileImgAjax(fileCurVideoFilePath); }
-    if (fileCurVideoFilePath in fileBordersList) {
-        drawBorders = fileBordersList[fileCurVideoFilePath];
-        for (var key in drawBorders) {
-            console.log(drawBorders[key]);
-            drawNewBorder(key, drawBorders[key]);
-        }
-        console.log(drawBorders);
-    }
-    $('#fileModalImg').modal('show');
-
-}
-function getFilesListAjax() {
-    var jqxhr = $.ajax("http://localhost:8080/filesList")
-        .done(function (data) {
-            console.log("success ajax", data);
-            try {
-                fileList = JSON.parse(data);
-                console.log("success ajax json", fileList);
-            } catch{
-                console.log("error ajax json!!!");
-            }
-            //data.files.forEach((row) => { addRow(row); });
-        })
-        .fail(function () { console.log("error get ajax"); })
-        .always(function () { console.log("complete ajax request"); });
-}
-
-
-function getFileImgAjax(filePath) {
-    var jqxhr = $.ajax({
-        url: "http://localhost:8080/getFileImg?file=" + filePath,
-        cache: false,
-        xhrFields: { responseType: 'blob' }
-    })
-        // xhr.overrideMimeType("text/plain; charset=x-user-defined");
-        .done(function (data) {
-            // console.log("success ajax", data);
-            var url = window.URL || window.webkitURL;
-            fileImgs[filePath] = url.createObjectURL(data);
-            $('#result_image').attr("src", fileImgs[filePath]);
-            $('#fileModalImgDiv').css("background-image", "url('" + fileImgs[filePath] + "')");
-        })
-        .fail(function () { console.log("error get ajax"); })
-        .always(function () { console.log("complete ajax request"); });
-}
-
-function fileSaveBorders() {
-    fileBordersList[fileCurVideoFilePath] = drawBorders;
-    console.log('fileSaveBorders', drawActiveBorder, fileBordersList);
-    $("#file_borders_number").val(Object.keys(drawBorders).length);
-
-}
-
-function fileCancelBorders() {
-    console.log('fileCancelBorders');
-    drawBorders = {};
-    drawActiveBorder = null;
-    $('#fileSvg').empty();
-    $('#fileSvg').empty();
-    $('#displayLineName').html('&nbsp;');
-    $('#dtVerticalScroll tbody').empty();
-}
-
-function addToQueue() {
-    if (parseInt($("#file_borders_number").val()) > 0) {
-        console.log("add to queue");
-    } else {
-        alert("Please add some borders!!!!");
-    }
-}
 
 var drawBorders = {};
 var drawActiveBorder = null;
@@ -102,10 +20,149 @@ var css = '.static {} .draggable {cursor: move;}',
 head.appendChild(style);
 
 style.type = 'text/css';
-if (style.styleSheet) {style.styleSheet.cssText = css;
-} else { style.appendChild(document.createTextNode(css));
+if (style.styleSheet) {
+    style.styleSheet.cssText = css;
+} else {
+    style.appendChild(document.createTextNode(css));
 }
 
+
+function validedName() {
+    let input = $('#new_border_name');
+    let c = input.selectionStart, r = /[^a-zA-Z0-9_]/gi, v = input.val();
+    if (r.test(v)) {
+        input.val(v.replace(r, ''));
+        c--;
+    }
+}
+
+function showImgBorders() {
+    console.log("showImgBorders", curCamId);
+    //drawBorders = 
+    if ($("#result_image").src != "" && $('#addStream_url').val() != "") {
+        let fileCurVideoFilePath = $('#addStream_url').val();
+            // console.log(!(fileCurVideoFilePath in fileImgs), fileImgs);
+        if (!(fileCurVideoFilePath in fileImgs)) { getFileImgAjax(fileCurVideoFilePath); }
+        let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
+        drawBorders = streamsConfigList[curCamId]['borders'];
+        for (var key in drawBorders) {
+            console.log("showImgBorders", key, drawBorders[key])
+            let data = [
+                [parseInt(drawBorders[key][0][0] * 1.3), drawBorders[key][0][1]],
+                [parseInt(drawBorders[key][1][0] * 1.3), drawBorders[key][1][1]]
+            ];
+            console.log("data", data);
+            drawNewBorder(key, data);
+            }
+            console.log(drawBorders);        
+        $('#fileModalImg').modal('show');
+        makeDraggable();
+    } else {
+        console.log("Can not load Image!");
+        //alert("Can not load Image!");
+    }
+}
+
+function getFileImgAjax() {
+    console.log("getFileImgAjax", curCamId, $('#addStream_url').val());
+    if ($('#addStream_url').val() !="") {
+        let filePath = $('#addStream_url').val();
+        var jqxhr = $.ajax({
+            url: "http://localhost:8080/getFileImg?file=" + filePath,
+            cache: false,
+            xhrFields: { responseType: 'blob' }
+        })
+        // xhr.overrideMimeType("text/plain; charset=x-user-defined");
+        .done(function (data) {
+            // console.log("success ajax", data);
+            var url = window.URL || window.webkitURL;
+            fileImgs[filePath] = url.createObjectURL(data);
+            $('#result_image').attr("src", fileImgs[filePath]);
+            $('#fileModalImgDiv').css("background-image", "url('" + fileImgs[filePath] + "')");
+        })
+        .fail(function () { console.log("error get ajax"); })
+        .always(function () { console.log("complete ajax request"); });
+    } else {
+        console.log("Can not load file");
+        alert("Error!\nWrong video path.");
+    }
+    }
+
+function fileSaveBorders() {
+    let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
+    drawBorders_old = streamsConfigList[curCamId]['borders'];
+//    console.log(drawBorders_old, drawBorders);
+    //if (drawBorders_old != drawBorders) {
+    for (var key in drawBorders) {
+        //console.log("showImgBorders", key, drawBorders[key])
+        drawBorders[key][0][0] = parseInt(drawBorders[key][0][0] / 1.3);
+        drawBorders[key][1][0] = parseInt(drawBorders[key][1][0] / 1.3);
+    };
+    streamsConfigList[curCamId]['borders'] = drawBorders;
+    localStorage.setItem('streamsConfigList', JSON.stringify(streamsConfigList));
+    $("#file_borders_number").val(Object.keys(drawBorders).length);
+}
+
+function fileCancelBorders() {
+    console.log('fileCancelBorders');
+    drawBorders = {};
+    drawActiveBorder = null;
+    $('#fileSvg').empty();
+    $('#fileSvg').empty();
+    $('#displayLineName').html('&nbsp;');
+    $('#dtVerticalScroll tbody').empty();
+
+}
+
+function saveToServer() {
+    if (parseInt($("#addStream_borders_number").val()) > 0) {
+        console.log("add to queue");
+        let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
+        let defaultConfig = {
+            'id': 'test00',
+            'url': 'video/39.avi',
+            'isFromFile': true,
+            'save_path': 'video/39_out.avi',
+            'body_min_w': 64,
+            'path_track': 20,
+            'body_res': [256, 128],
+            'display_video_flag': true,
+            'max_cosine_distance': 0.2,
+            'save_video_flag': true,
+            'skip_frames': 0,
+            'encoder_filename': 'mars-small128.pb',
+            'batch_size': 32,
+            'img_size_start': [1600, 1200],
+            'save_video_res': [720, 540],
+            'borders': {}
+        };
+        //id, url, skip_frames, isFromFile, save_path, save_video_res, save_video_flag
+        if (curCamId in streamsConfigList) {
+            if (streamsConfigList[curCamId].hasOwnProperty('url')) {
+                console.log("curCamId")
+                defaultConfig = streamsConfigList[curCamId];
+            }
+        }
+        //for (var key in defaultConfig) {
+        console.log("$('#addStream_isFromFile').val()", $('#addStream_isFromFile').prop('checked'))
+        defaultConfig['id'] = $('#addStream_id').val();
+        defaultConfig['name'] = $('#addStream_name').val();
+        defaultConfig['url'] = $('#addStream_url').val();
+        defaultConfig['skip_frames'] = $('#addStream_skip_frames').val();
+        defaultConfig['isFromFile'] = $('#addStream_isFromFile').prop('checked');
+        defaultConfig['save_path'] = $('#addStream_save_path').val();
+        defaultConfig['save_video_flag'] = $('#addStream_save_video_flag').prop('checked');
+        //}
+        console.log("defaultConfig ready", defaultConfig);
+        streamsConfigList[curCamId] = defaultConfig;
+        localStorage.setItem('streamsConfigList', JSON.stringify(streamsConfigList));
+        if (wsCmd == null) { WebSocketCmd();}
+         //wsCmd.send(JSON.stringify({ "cmd": "getManagerData" }));
+        wsCmd.send(JSON.stringify({ "cmd": "saveStream", "config": { "name": curCamId, "tp": 'Stream_', "data": defaultConfig} }));
+    } else {
+        alert("Please add some borders!!!!");
+    }
+}
 
 function guidGenerator(len, list, cnt) {
     let res = '';
@@ -175,7 +232,7 @@ function setActiveBorder(id) {
 
 function drawBorder(id, xy) {
     //xy = x1, y1, x2, y2
-    console.log(xy);
+    // console.log("xy",xy);
     let svg = $("#fileSvg")[0];
     let len = Math.floor(Math.sqrt(Math.pow(xy[1][0] - xy[0][0], 2) + Math.pow(xy[0][1] - xy[1][1], 2)));
     //let len = Math.floor(Math.sqrt(Math.pow(xy[2] - xy[0], 2) + Math.pow(xy[1] - xy[3], 2)));
@@ -186,20 +243,6 @@ function drawBorder(id, xy) {
     drawNewCircleSvg(svg, id.toString() + "_line_start", xy[0][0], xy[0][1], "#00ff21");
     drawNewCircleSvg(svg, id.toString() + "_line_end", xy[1][0], xy[1][1], "#ff0021");
 }
-
-//function drawBorderLine(a, b){
-//    let length = 40;
-//    let vX0 = b[0] - a[0];
-//    let vY0 = b[1] - a[1];
-//    let mag = math.sqrt(vX0 * vX0 + vY0 * vY0);
-//    let vX = vX0 / mag;
-//    let vY = vY0 / mag;
-//    let temp = vX;
-//    vX = -vY;
-//    vY = temp;
-//    let z0 = (int(a[0] + vX0 / 2), int(a[1] + vY0 / 2));
-//    z1 = (int(a[0] + vX0 / 2 - vX * length), int(a[1] + vY0 / 2 - vY * length));
-//}
 
 function drawNewBorder(name, data) {
     drawBorder(name, data);
@@ -244,9 +287,11 @@ function delActiveBorder() {
 }
 
 
-function makeDraggable(evt) {
-    var LongLine, LongLine2, startOrNot;
-    var svg = evt.target;
+function makeDraggable() {
+    console.log("makeDraggable");
+    let LongLine, LongLine2, startOrNot;
+    // var svg = document.getElementById("fileSvg");
+    let svg = $("#fileSvg")[0];
     svg.addEventListener('mousedown', startDrag);
     svg.addEventListener('mousemove', drag);
     svg.addEventListener('mouseup', endDrag);
@@ -259,6 +304,7 @@ function makeDraggable(evt) {
     var selectedElement, offset, transform;
 
     function getMousePosition(evt) {
+        // console.log("getMousePosition");
         var CTM = svg.getScreenCTM();
         if (evt.touches) { evt = evt.touches[0]; }
         return {
@@ -268,6 +314,7 @@ function makeDraggable(evt) {
     }
 
     function startDrag(evt) {
+        // console.log("Start Drag")
         if (evt.target.classList.contains('draggable')) {
             selectedElement = evt.target;
             //console.log("evt.target", evt.target.id);
@@ -291,6 +338,7 @@ function makeDraggable(evt) {
     }
 
     function drag(evt) {
+        // console.log("drag function")
         if (selectedElement) {
             evt.preventDefault();
             var coord = getMousePosition(evt);

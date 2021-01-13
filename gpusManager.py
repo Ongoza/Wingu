@@ -20,7 +20,7 @@ class Manager(threading.Thread):
         self.arr_symb = np.fromstring('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', dtype=np.uint8)
         self.gpusList = [] # available devices
         self.gpusConfigList = {} # available devices
-        self.streamsConfigList = {} # available devices
+        self.streamsConfigList = {} # available configs
         self.camsList = {} # available cams on gpus
         self.log = logging.getLogger('app')
         self.log.setLevel(logging.DEBUG)
@@ -76,6 +76,27 @@ class Manager(threading.Thread):
             print(sys.exc_info())
             self.kill()            
 
+    def updateConfig(self, cfg):
+        res = False
+        try:
+            if cfg['tp'] == "Stream_":
+               if cfg['name'] in self.camsList.keys():
+
+                   print("alreday runnning need to stop before updating")
+               else:
+                   print("start update")
+                   self.streamsConfigList[cfg['name']] = cfg['data'] 
+            elif cfg['tp'] == "Gpu_":
+                print("update gpu config")
+            elif cfg['tp'] == "Gpu_":
+                print("update gpu config")
+            else:
+                print("error")
+        except:
+            print(sys._ext_info())
+            self.log.error("can not updateConfig for " + cfg['tp']+' '+cfg['name'] )
+        return res
+
     def loadConfig(self, fileName, tp):
         res = None
         fileName = os.path.join('config', tp + str(fileName)+'.yaml')
@@ -88,9 +109,12 @@ class Manager(threading.Thread):
                 self.log.error("Can not load config for " + fileName )
         return res
 
+    def getStreamsConfig(self):
+        return {'streamsConfigList': self.streamsConfigList}
+
     def getConfig(self):
         #np.append(uid, np.uint8(device_id))
-        return {'managerConfig':self.config, 'gpusConfigList':self.gpusConfigList, 'streamsConfigList': self.streamsConfigList}
+        return {'managerConfig':self.config, 'gpusConfigList':self.gpusConfigList}
 
     def createUid(self):
         #np.append(uid, np.uint8(device_id))
@@ -166,6 +190,7 @@ class Manager(threading.Thread):
         if device:
             if device in self.getActiveGpusList():
                 self.gpusActiveList[device].startCam(config, device)
+                self.camsList[config['id']] = device
             else:
                 self.log.info("Device "+str(device)+" is not availble")
         else:

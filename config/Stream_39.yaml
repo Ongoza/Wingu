@@ -1,30 +1,29 @@
-﻿id: test00
-uid: lynE3ce
-url: video/39.avi
-isFromFile: true
-save_path: video/39_out.avi
+batch_size: 32
 body_min_w: 64
-path_track: 20
 body_res:
 - 256
 - 128
-display_video_flag: true
-max_cosine_distance: 0.2
-save_video_flag: true
-skip_frames: 0
-encoder_filename: mars-small128.pb
-batch_size: 32
-img_size_start:
-- 1600
-- 1200
-save_video_res:
-- 720
-- 540
 borders:
   border1:
   - - 0
     - 104
   - - 312
     - 104
-comments:
-    привет!!!!
+display_video_flag: true
+encoder_filename: mars-small128.pb
+id: '39'
+img_size_start:
+- 1600
+- 1200
+isFromFile: true
+max_cosine_distance: 0.2
+name: test00
+path_track: 20
+save_path: video/39_out.avi
+save_video_flag: true
+save_video_res:
+- 720
+- 540
+skip_frames: '0'
+uid: lynE3ce
+url: video/39.avi

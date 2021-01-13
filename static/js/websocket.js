@@ -38,10 +38,12 @@ function WebSocketCmd() {
                               console.log("!!!managerConfig data updating...", jsonData);
                               localStorage.setItem('managerConfig', JSON.stringify(jsonData['managerConfig']));
                                configViewUpdate('managerConfig');                                 
-                          } else if (jsonData.hasOwnProperty('camera')) {
-                              console.log("!!!camera data updating...", jsonData);
+                           } else if (jsonData.hasOwnProperty('camera')) {
+                               console.log("!!!camera data updating...", jsonData);
+                           } else if (jsonData.hasOwnProperty('OK')) {
+                              console.log("Server says OK", jsonData);
                           } else {
-                              console.log("Can not detect websocket command!!", evt.data);
+                              console.log("Server can not detect command!!", evt.data);
                           }
                       }
                   }catch (error) {

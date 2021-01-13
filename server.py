@@ -42,30 +42,30 @@ camerasListData = {'cameras': [['id','name','online','counting','comments','url'
 
 test_manager_config = {'managerConfig': {'cpu_config': 0, 'autostart_gpus_list': None, 'gpus_configs_list': [0, 1], 'autotart_streams': None, 'streams': [39, 43], 'gpu_configs': {}, 'streams_configs': {}}, 
                        'gpusConfigList': {'cpu': {'id': 'gpu_0', 'batch_size': 32, 'img_size': 416, 'detector_name': 'yolov4', 'detector_filename': 'yolov4.h5', 'yolo_max_boxes': 100, 'yolo_iou_threshold': 0.5, 'yolo_score_threshold': 0.5}}, 
-                       'streamsConfigList': {'39': {'id': 'test00', 'uid': 'lynE3ce', 'url': 'video/39.avi', 'isFromFile': True, 'save_path': 'video/39_out.avi', 'body_min_w': 64, 'path_track': 20, 'body_res': [256, 128], 'display_video_flag': True, 'max_cosine_distance': 0.2, 'save_video_flag': True, 'skip_frames': 0, 'encoder_filename': 'mars-small128.pb', 'batch_size': 32, 'img_size_start': [1600, 1200], 'save_video_res': [720, 540],
-                            'borders': {'border1': [[0, 104], [312, 104]]}}, '43': {'id': 'test01', 'url': 'video/43.avi', 'isFromFile': True, 'save_path': 'video/43_out.avi', 'body_min_w': 64, 'path_track': 20, 'body_res': [256, 128], 'display_video_flag': True, 'max_cosine_distance': 0.2, 'save_video_flag': True, 'skip_frames': 2, 'encoder_filename': 'mars-small128.pb', 'batch_size': 32, 'img_size_start': [1600, 1200], 'save_video_res': [720, 540], 'borders': {'border1': [[0, 104], [312, 104]]}}}}
+                       }
 
-async def camerasList(request):
-    data = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
-    return  web.json_response(data)
+test_streams_config =  {'streamsConfigList': 
+                          {
+                           '39': {'id': 39, 'name': 'test00', 'uid': 'lynE3ce', 'url': 'video/39.avi', 'isFromFile': True, 'save_path': 'video/39_out.avi', 'body_min_w': 64, 'path_track': 20, 'body_res': [256, 128], 'display_video_flag': True, 'max_cosine_distance': 0.2, 'save_video_flag': True, 'skip_frames': 0, 'encoder_filename': 'mars-small128.pb', 'batch_size': 32, 'img_size_start': [1600, 1200], 'save_video_res': [720, 540], 'borders': {'border1': [[0, 104], [312, 104]]}}
+                            ,'43': {'id': 43, 'name':'test01', 'url': 'video/43.avi', 'isFromFile': True, 'save_path': 'video/43_out.avi', 'body_min_w': 64, 'path_track': 20, 'body_res': [256, 128], 'display_video_flag': True, 'max_cosine_distance': 0.2, 'save_video_flag': True, 'skip_frames': 2, 'encoder_filename': 'mars-small128.pb', 'batch_size': 32, 'img_size_start': [1600, 1200], 'save_video_res': [720, 540], 'borders': {'border1': [[0, 104], [312, 104]]}}}
+                       }
 
-async def getFilesList(request):
-    #params = request.rel_url.query
-    #print(params)
-    #print(params['file_1'])
-    #// json data structure:  name, size in GB, last change time
-    data = {'files':{'39.avi':[0.4,'20.10.2020'], 'new':{'45.avi':[0.4,'20.10.2020']}}};
-    return  web.json_response(data)
+#async def camerasList(request):
+#    data = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
+#    return  web.json_response(data)
 
-async def saveConfig(request):
-    msg_json = json.loads('data from post')
-    print(msg_json)
-    return  web.json_response({'answer':['saveConfig','ok',request]})
+#async def getFilesList(request):
+#    #params = request.rel_url.query
+#    #print(params)
+#    #print(params['file_1'])
+#    #// json data structure:  name, size in GB, last change time
+#    data = {'files':{'39.avi':[0.4,'20.10.2020'], 'new':{'45.avi':[0.4,'20.10.2020']}}};
+#    return  web.json_response(data)
 
-async def addToQueue(request):
-    msg_json = json.loads('data from post')
-    print(msg_json)
-    return  web.json_response({'answer':['addToQueue','ok',request]})
+#async def addToQueue(request):
+#    msg_json = json.loads('data from post')
+#    print(msg_json)
+#    return  web.json_response({'answer':['addToQueue','ok',request]})
 
 async def getFileImg(request):
     try:
@@ -76,7 +76,7 @@ async def getFileImg(request):
             if os.path.isfile(fileName):
                 vidcap = cv2.VideoCapture(fileName)
                 img = vidcap.read()[1]
-                img = cv2.resize(img, (640,480), interpolation = cv2.INTER_AREA)
+                img = cv2.resize(img, (541,416), interpolation = cv2.INTER_AREA)
                 res = cv2.imencode('.JPEG', img)[1].tobytes()
                 #exif_dict = piexif.load(res.info['exif'])
                 #print("res", exif_dict)
@@ -94,11 +94,28 @@ async def getFileImg(request):
 async def Index(request):
     return web.HTTPFound('static/cameras.html')
 
+async def saveConfig(ws, config):
+    res = {'OK':["saveConfig", config['tp'], config['name']]}
+    print(res)
+    fileName = os.path.join('config', config['tp'] + str(config['name'])+'.yaml')
+    try:
+        if os.path.isfile(fileName):
+            log.info("Create backup for config " + fileName)
+            # !!!!!!!!!!!!!!!!!!!!!!!!
+        with open(fileName, 'w', encoding='utf-8') as f:    
+            yaml.dump(config['data'], f)
+        #if manager in app:
+        #    app["manager"].updateConfig(config)
+    except:
+          log.error("Can not save config for " + fileName )
+          res = {'error':['saveConfig', config['tp'], config['name']]}
+          print(sys.exc_info())
+    await ws.send_json(res)
+
 async def WebSocketCmd(request):
     ws = web.WebSocketResponse()
     await ws.prepare(request)
-    request.app['websocketscmd'].add(ws)
-    
+    request.app['websocketscmd'].add(ws)    
     #totalFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
@@ -108,34 +125,49 @@ async def WebSocketCmd(request):
                 print("json=", type(msg_json), msg_json['cmd'])
                 if msg_json['cmd'] == 'close':
                     await ws.close()
+                elif msg_json['cmd'] == 'getStreamsConfig':
+                    # if "manager" in app:
+                        # data = app["manager"].getStreamsConfig()
+                    data = test_streams_config                    
+                    await ws.send_json(data)
                 elif msg_json['cmd'] == 'getManagerData':
                     if True:
                     # if "manager" in app:
                         # data = app["manager"].getConfig()
-                        print("test_manager_config")
+                        # print("test_manager_config")
                         data = test_manager_config
                         # print("data", data)
                         await ws.send_json(data)
                     else:
                         print(sys.exc_info())
                         await ws.send_json({'error':['getManagerData', msg.data]})
-                elif msg_json['cmd'] == 'getCameras':
-                    # print(camerasListData)
-                    await ws.send_json(camerasListData)
-                elif msg_json['cmd'] == 'getFileImg':
-                    print("testImg")
-                    #arr_symb = np.fromstring('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', dtype=np.uint8)
-                    #uid_g = np.append(np.random.choice(arr_symb, 7), np.uint8(1))
-                    img = cv2.imread('video/cars.jpg')
-                    res = cv2.imencode('.jpg', img)[1]
-                    uid_g = np.array([78, 55, 68, 79, 114, 97, 114, 1], dtype=np.uint8)
-                    # N7DOrar
-                    res = np.append(res, uid_g)
-                    #data = np.array([1,2], dtype=np.uint8)
-                    #res = np.concatenate(res, data)
-                    # print("res",type(res), res.dtype, res.size, uid_g, res[-8:])
-                    # cv2.imwrite("video/dd.jpg", img)
-                    await ws.send_bytes(res.tobytes())
+                elif msg_json['cmd'] == 'saveStream':
+                    print("saveStream", msg_json['config'])                    
+                    await saveConfig(ws, msg_json['config'])
+                elif msg_json['cmd'] == 'startStream':
+                    print("startStream", msg_json['stream_id'])
+                    await ws.send_json({'OK':["startStream", msg_json['stream_id']]})
+                elif msg_json['cmd'] == 'startGetStream':
+                    print("startGetStream", msg_json['stream_id'])
+
+                    await ws.send_json({'OK':["startGetStream", msg_json['stream_id']]})
+                #elif msg_json['cmd'] == 'getCameras':
+                #    # print(camerasListData)
+                #    await ws.send_json(camerasListData)
+                #elif msg_json['cmd'] == 'getFileImg':
+                #    print("testImg")
+                #    #arr_symb = np.fromstring('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', dtype=np.uint8)
+                #    #uid_g = np.append(np.random.choice(arr_symb, 7), np.uint8(1))
+                #    img = cv2.imread('video/cars.jpg')
+                #    res = cv2.imencode('.jpg', img)[1]
+                #    uid_g = np.array([78, 55, 68, 79, 114, 97, 114, 1], dtype=np.uint8)
+                #    # N7DOrar
+                #    res = np.append(res, uid_g)
+                #    #data = np.array([1,2], dtype=np.uint8)
+                #    #res = np.concatenate(res, data)
+                #    # print("res",type(res), res.dtype, res.size, uid_g, res[-8:])
+                #    # cv2.imwrite("video/dd.jpg", img)
+                #    await ws.send_bytes(res.tobytes())
                 else:
                     print("error websocket command")
                     await ws.send_json({'error':['unknown', msg.data]})
@@ -155,11 +187,11 @@ routes = [
     #('GET', '/testImg',  testImg),
     # ('*',   '/login',   Login,     'login'),
     # ('POST', '/sign/{action}',  Sign,    'sign'),
-    ('GET',  '/camerasList', camerasList),
+    #('GET',  '/camerasList', camerasList),
     ('GET',  '/getFileImg', getFileImg),
-    ('GET',  '/filesList', getFilesList),
-    ('POST',  '/addToQueue', addToQueue),
-    ('POST',  '/saveConfig', saveConfig),
+    #('GET',  '/filesList', getFilesList),
+    #('POST',  '/addToQueue', addToQueue),
+    #('POST',  '/saveConfig', saveConfig),
 
 ]
 

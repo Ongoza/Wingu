@@ -1,84 +1,70 @@
-﻿<!--//'39':
-// { 'id': 'test00',
-//   'uid': 'lynE3ce',
-// 'url': 'video/39.avi',
-// 'isFromFile': True,
-// 'save_path': 'video/39_out.avi',
-// 'body_min_w': 64,
-// 'path_track': 20,
-// 'body_res': [256, 128],
-// 'display_video_flag': True,
-// 'max_cosine_distance': 0.2,
-// 'save_video_flag': True,
-// 'skip_frames': 0,
-// 'encoder_filename': 'mars-small128.pb',
-// 'batch_size': 32,
-// 'img_size_start': [1600, 1200],
-// 'save_video_res': [720, 540],
-// 'borders': { 'border1': [[0, 104], [312, 104]] } }-->
-<div>
+﻿<div>
     <div>
         <div class="container2">
-
             <div class="card  mb-14">
                 <div class="row justify-content-md-center">
-                    <div class="col-md-4" style="display:flex;justify-content:center;align-items:center;max-width:300px;min-height:220px; margin:auto;border:3px solid #00ffff;">
-                        <span>no image</span>
+                    <div onclick="getFileImgAjax();" class="col-md-4" style="display:flex;justify-content:center;align-items:center;max-width:300px;min-height:220px; margin:auto;border:3px solid #00ffff;">
+                        <span>Click for update image</span>
                         <img id="result_image" src="" style="height:100%;width:100%;position: absolute;">
                     </div>
                     <div class="col-md-8">
-                        <div class="col-md-auto card-title bg-secondary text-white">Add a video file to the queue</div>
+                        <div class="col-md-auto card-title bg-secondary text-white">Change configuration for stream</div>
                         <div id="content">
                             <form>
                                 <div class="input-group mb-auto">
                                     <div class="input-group-prepend">
-                                        <span class="input-group-text">Video file</span>
+                                        <span class="input-group-text">ID</span>
                                     </div>
-                                    <input type="text" class="form-control" id="inputFilePath01" value="39.avi">
+                                    <input type="text" class="form-control" id="addStream_id" value="">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text">Name</span>
+                                    </div>
+                                    <input type="text" class="form-control" id="addStream_name" value="">
                                 </div>
 
                                 <div class="input-group mb-auto">
-                                    <form class="form-inline mb-3">
-                                        <div class="input-group w-50">
-                                            <div class="input-group-prepend">
-                                                <span class="input-group-text">Proceed each n frame</span>
-                                            </div>
-                                            <input type="number" class="form-control" id="file_skip" value=4 />
+                                        <div class="input-group-prepend">
+                                                <span class="input-group-text">URL</span>
                                         </div>
-                                    </form>
-                                </div>
-                                <div class="input-group mb-auto">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">Inform when will be completed by emails:</span>
+                                        <input type="text" class="form-control" id="addStream_url" value="">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text">Local file</span>
+                                                <span class="input-group-text"><input type="checkbox" aria-label="Local file" id="addStream_isFromFile"></span>
+                                            </div>
                                     </div>
-                                    <input type="text" class="form-control" id="file_emails" placeholder="admin@gmail.com, user@gmail.com">
-                                </div>
 
-                                <div class="input-group mb-auto">
-                                    <div class="input-group-prepend">
-                                        <span class="input-group-text">Save result video</span>
-                                        <span class="input-group-text"><input type="checkbox" aria-label="Save video to file"></span>
+                                    <div class="input-group mb-auto">
+                                        <div class="input-group-prepend">
+                                            <span class="input-group-text">Save result video</span>
+                                            <span class="input-group-text"><input type="checkbox" aria-label="Save video to file" id="addStream_save_video_flag"></span>
+                                        </div>
+                                        <input type="text" class="form-control" id="addStream_save_path" placeholder="" />
+                                        <div class="input-group-append">
+                                            <select class="custom-select" id="addStream_save_video_res">
+                                                <option selected value="0">320p</option>
+                                                <option value="1">480p</option>
+                                                <option value="2">720p</option>
+                                            </select>
+                                        </div>
                                     </div>
-                                    <input type="text" class="form-control" id="file_save" placeholder="" />
-                                    <div class="input-group-append">
-                                        <select class="custom-select" id="inlineFormCustomSelectPref">
-                                            <option selected value="0">320p</option>
-                                            <option value="1">480p</option>
-                                            <option value="2">720p</option>
-                                        </select>
+
+                                    <div class="input-group mb-auto">
+                                        <div class="input-group w-50">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text">Proceed each N frame</span>
+                                            </div>
+                                            <input type="number" class="form-control" id="addStream_skip_frames" value="" />
+                                        </div>
+
+                                        <div class="input-group-prepend"><span class="input-group-text">Borders:</span></div>
+                                        <input type="text" id="addStream_borders_number" class="form-control" value="0" readonly />
+
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="showImgBorders();">Edit</button>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div class="input-group mb-auto">
-                                    <div class="input-group-prepend"><span class="input-group-text">Borders:</span></div>
-                                    <input type="text" id="file_borders_number" class="form-control" value="0" readonly />
-
-                                    <div class="input-group-append">
-                                        <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="showImgBorders();">Edit</button>
-                                    </div>
-                                </div>
-
-                                <button type="button" class="btn btn-primary" data-dismiss="modal" onclick="addToQueue();">Add to queue</button>
+                                    <button type="button" class="btn btn-primary" data-dismiss="modal" onclick="saveToServer();">Save to Server</button>
                             </form>
                         </div>
                     </div>
@@ -121,8 +107,8 @@
             <div class="modal-body">
                 <div class="container-fluid">
                     <div class="row">
-                        <div id="fileModalImgDiv" style="display:flex;width:644px; height:484px;margin:auto;border:2px solid #00ffff;background-image:url('');background-repeat:no-repeat;">
-                            <svg id="fileSvg" style="border:1px solid black;z-index:9;" width="640" height="480" viewBox="0 0 640 480" xmlns="http://www.w3.org/2000/svg" onload="makeDraggable(evt)"></svg>
+                        <div id="fileModalImgDiv" style="display:flex;width:550px; height:422px;margin:auto;border:2px solid #00ffff;background-image:url('');background-repeat:no-repeat;">
+                            <svg id="fileSvg" style="border:1px solid black;z-index:9;" width="541" height="416" viewBox="0 0 541 416" xmlns="http://www.w3.org/2000/svg"></svg>
                         </div>
 
                         <div class="col-sm-4">
