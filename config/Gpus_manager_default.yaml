@@ -1,11 +1,11 @@
-cpu_config: 0
+cpu_config: device0
 autostart_gpus_list:
-# - 0
+- device0
 gpus_configs_list:
-- 0
-- 1
+- device0
+- device1
 autotart_streams:
-# - 39
+- file_39
 streams:
-- 39
-- 43
+- file_39
+- file_43

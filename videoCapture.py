@@ -8,7 +8,6 @@ import math
 import yaml
 import numpy as np
 import cv2
-import gpusManager
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 from deep_sort import nn_matching
@@ -18,34 +17,36 @@ from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 
 class VideoCapture:
-    def __init__(self, camConfigFile, gpuConfig, device_id, log):        
-        print("start init stream object ", camConfigFile)
+    def __init__(self, camConfig, gpuConfig, device_id, cam_id, log):        
+        self.log = log      
+        self.log.debug("start init stream object " + str(cam_id))            
         self.totalFrames = 0
         self.cur_frame_cnt = 0
-        self.log = log
+        self.proceed_frames_cnt = 0
+        self.proceedTime = [0, 0]
+        self.outFrame = np.array([])
+        self.isDrow = False
+        self.save_video_res = None
+        self.id = str(cam_id)
+        self.device_id = device_id        
+        self.uid = np.append(
+            np.random.choice(
+                np.fromstring('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', dtype=np.uint8),
+                7), np.uint8(device_id))
         try:
-            with open(os.path.join('config', camConfigFile+'.yaml')) as f:    
-                self.config = yaml.load(f, Loader=yaml.FullLoader)
+            self.config = camConfig
             # print("stream config", self.config)
-            self.id = self.config['id']
-            self.device_id = device_id
             self.url = self.config['url']
             self.isFromFile = self.config['isFromFile']
-            self.log.debug("start init stream object")            
             self.cap = cv2.VideoCapture(self.url)
-            self.img_size = gpuConfig['img_size']
+            self.img_size = int(gpuConfig['img_size'])
             # self.lastFrame = 100
             self.max_hum_w = int(self.img_size/4) 
             self.GPUconfig = gpuConfig
-            self.save_video_res = None
             self.frame_res = (self.img_size, self.img_size)
-            self.skip_frames = self.config['skip_frames']
-            self.batch_size = self.config['batch_size']
-            self.isDrow = False
-            self.proceed_frames_cnt = 0
-            self.proceedTime = [0, 0]
-            self.outFrame = np.array([])
-            self.path_track = self.config['path_track']
+            self.skip_frames = int(self.config['skip_frames'])
+            self.batch_size = int(self.config['batch_size'])
+            self.path_track = int(self.config['path_track'])
             self.save_video_flag = self.config['save_video_flag']
             self.display_video_flag = self.config['display_video_flag']
             if(self.config['save_video_flag'] or self.config['display_video_flag']):
@@ -110,7 +111,7 @@ class VideoCapture:
     def read(self):
         start = time.time()
         if self.isFromFile:
-            print("proceed_frames_cnt="+str(self.proceed_frames_cnt))
+            # print("proceed_frames_cnt="+str(self.proceed_frames_cnt))
             if self.proceed_frames_cnt < self.totalFrames:
                 ret, frame = self.cap.read()
                 self.cur_frame_cnt += 1
@@ -122,7 +123,7 @@ class VideoCapture:
                 else:
                     #self.log.debug("Skip frame")
                     frame = self.read()
-                self.proceedTime[0] = round(time.time() - start, 2)
+                self.proceedTime[0] = time.time() - start
                 return frame
             else:
                 self.exit()
@@ -182,7 +183,7 @@ class VideoCapture:
             detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
             self.tracker.predict()
             self.tracker.update(detections)
-            self.log.debug("traks "+ str(len(self.tracker.tracks)))
+            # self.log.debug("videoCapture traks "+ str(len(self.tracker.tracks)))
             for track in self.tracker.tracks:
                 if(not track.is_confirmed() or track.time_since_update > 1):
                     # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
@@ -257,6 +258,7 @@ class VideoCapture:
 
 if __name__ == "__main__":
     print("start")
+
     log = logging.getLogger('app')
     log.setLevel(logging.DEBUG)
     f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
@@ -266,24 +268,35 @@ if __name__ == "__main__":
     log.addHandler(ch)
     
     streams = []
-    with open('config/Gpu_0.yaml') as f:    
-        config = yaml.load(f, Loader=yaml.FullLoader)  
-    streams.append(VideoCapture("Stream_39", config, 0, log))
+    with open('config/Stream_file_39.yaml', encoding='utf-8') as f:    
+        configStream = yaml.load(f, Loader=yaml.FullLoader)  
+    with open('config/Gpu_device0.yaml', encoding='utf-8') as f:    
+        configGpu = yaml.load(f, Loader=yaml.FullLoader)
+    device_id = 0
+    cam_id = 'file_39'
+    #                           camConfig, gpuConfig, device_id, cam_id, log
+    streams.append(VideoCapture(configStream, configGpu, device_id, cam_id, log))
     time.sleep(5)
     if len(streams) > 0:
         while True:
             try:
                 for stream in streams:
-                    print("stream", stream.cur_frame_cnt, streams.totalFrames)
+                    print("stream", stream.cur_frame_cnt, stream.totalFrames)
                     frame = stream.read()
                     if frame.any():
                         cv2.imshow("preview", frame)
+                        print("dd",)
+                        if stream.proceedTime[0]:
+                            print("fps", 1.0/(stream.proceedTime[0]))
+                        if stream.proceedTime[1]:
+                            print("fps", 1.0/(stream.proceedTime[1]))
                     else:
                         print("skip frame")
                 key = cv2.waitKey(2)
                 if key & 0xFF == ord('q'): break
             except:
                 print("stop by exception")
+                print(sys.exc_info()) 
                 break
     for stream in streams:
         stream.kill()

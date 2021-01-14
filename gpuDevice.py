@@ -18,16 +18,16 @@ import videoCapture
 # from server import log
 
 class GpuDevice(threading.Thread):
-    def __init__(self, device, configFileName, log):
+    def __init__(self, id, device_name, configFile, log):
         self.ready = False
-        self.id = device
+        self.id = id
         self.log = log
+        self.cams = {}
         self.proceedTime = 0
-        self.device = device
+        self.device = str(device_name)
         try:
-            with open(os.path.join('config', configFileName+'.yaml')) as f:    
-                self.config = yaml.load(f, Loader=yaml.FullLoader)        
-            if device == "CPU":
+            self.config = configFile        
+            if device_name == "CPU":
                 self.detector = YOLOv4(
                     input_shape=(self.config["img_size"], self.config["img_size"], 3), 
                     anchors=YOLOV4_ANCHORS, 
@@ -49,53 +49,51 @@ class GpuDevice(threading.Thread):
                         yolo_iou_threshold=self.config["yolo_iou_threshold"], 
                         yolo_score_threshold=self.config["yolo_score_threshold"]) 
                     self.detector.load_weights(os.path.join('models', self.config['detector_filename']))
-            # print("GPU config", self.config)
+            print("GPU config", self.config)
             self.cnt = 0
-            self.id = self.config['id']
             self.frame = []
-            self.cams = []
             self.img_size = self.config['img_size']
             self._stopevent = threading.Event()
             self.ready = True
-            print("GPU ", str(self.id), " created ok")
+            self.log.debug(device_name +" with name "+ str(self.id)+ " created ok id:"+ str(self.id))
             threading.Thread.__init__(self)
             #t = threading.Thread(target=self._reader)
             #t.daemon = True
         except:
             print("Can not start GPU for " + str(self.id) + " ", self.config)            
             # traceback.print_exception(*sys.exc_info()) 
-            print("GPU err:", sys.exc_info())
+            print(sys.exc_info())
             self.kill()
 
     def getCamsList(self):
         # check if cam exists then update cams list and retur it
         return self.cams
 
-    def startCam(self, camConfigFileName, iter):
+    def startCam(self, camConfig, cam_id, iter):
         if iter < 100:
-            print('try to start video: ', camConfigFileName, iter)
+            # print('try to start video: ', camConfig, iter)
             iter += 1
             #id, url, borders, skipFrames, max_cosine_distance, nn_budget
             if self.ready:
-                cam =  videoCapture.VideoCapture(camConfigFileName, self.config, self.device, self.log)
+                cam =  videoCapture.VideoCapture(camConfig, self.config, self.id, cam_id, self.log)
                 if cam.id:
-                    self.cams.append(cam)
-                    self.log.debug("GPU "+str(self.id)+" Current num of caneras:" + str(len(self.cams)))
+                    self.cams[cam_id] = cam
+                    self.log.debug("GpuDevice "+str(self.device)+" Current num of cameras:" + str(len(self.cams)))
                     if(len(self.cams) == 1 ):
                         self.start()
                 else:
-                   self.log.info("GPU "+str(self.id)+" can not start Stream")
+                   self.log.info("GpuDevice "+str(self.id)+" can not start Stream")
             else:                
                 time.sleep(1)
-                self.startCam(camConfigFileName, iter)
+                self.startCam(camConfig, cam_id, iter)
         else:
-            self.log.info("GPU "+str(self.id)+" is not ready for start too long time!!")
+            self.log.info("GpuDevice "+str(self.id)+" is not ready for start too long time!!")
 
     def stopCam(self, id):
-        self.log.debug("GPU "+str(self.id)+'stop video: '+str(id))
-        self.cams[0].exit()
+        self.log.debug("GpuDevice "+str(self.id)+'stop video: '+str(id))
+        self.cams[id].exit()
         time.sleep(0.1)
-        del self.cams[0]
+        del self.cams[id]
         if(len(self.cams)==0):
             print("Any cameras are not present!")
             time.sleep(0.5)
@@ -105,31 +103,34 @@ class GpuDevice(threading.Thread):
         try:
             self.log.debug("start to stop GPU "+ str(self.id))
             self._stopevent.set()
-            for i in range(len(self.cams)):
-                print("try stop cam" + self.cams[i].id)
-                self.cams[i].kill()
-                print("cams num:",len(self.cams))
+            cams = list(self.cams.keys())
+            for cam in cams:
+                print("try stop cam" + cam)
+                self.cams[cam].kill()
+                print("cams num:", len(self.cams))
             self.log.info("GPU "+str(self.id)+" stopped")        
             self.killed = True
         except:
             print("can not stop some cams")
 
     def run(self):
-        self.log.debug("start GPU "+str(self.id))
+        self.log.debug("GpuDevice starting "+str(self.id))
         while not self._stopevent.isSet():
             start = time.time()
             self.cnt += 1
             frames = []
+            cams = []
             for cam in self.cams:
-                if cam._stopevent.isSet():
-                    self.log.debug("cam stopped: ", cam.id)
+                if self.cams[cam]._stopevent.isSet():
+                    self.log.debug("GpuDevice cam stopped: ", cam)
                     #delete cam from cams list
                     pass
                 else:
-                    frames.append(cam.read())
+                    frames.append(self.cams[cam].read())
+                    cams.append(self.cams[cam])
                     #print("cur_frame", cam.id, cam.cur_frame)
                     #if (tr): cv2.imwrite("video/39_2.jpg", frames[0])            
-            # print("fr",len(frames))
+            # print("fr",len(frames), cams)
             if frames:
                 try:
                     # frame = frames[0]
@@ -142,13 +143,13 @@ class GpuDevice(threading.Thread):
                     boxes, scores, classes, valid_detections = self.detector.predict(frames_tf)            
                     #    obj_detec = non_max_suppression(obj_detec, self.conf_thres, self.nms_thres)
                     for j in range(len(frames)):
-                       self.cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
+                       cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
                     self.proceedTime = time.time() - start
                 except:
-                    self.log.error("GPU "+str(self.id)+" skip frame by exception")
+                    self.log.error("GpuDevice "+str(self.id)+" skip frame by exception")
                     print(sys.exc_info(), type(frames_tf))
             else:
-                self.log.info("Any available streams in GPU "+str(self.id))
+                self.log.info("GpuDevice Any available streams in GPU "+str(self.id))
                 self.kill()
                 
 
@@ -162,61 +163,70 @@ if __name__ == "__main__":
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(f)
     log.addHandler(ch)
-    device = "CPU"
     devices = ["CPU"]
-    log.debug(tf.config.experimental.list_physical_devices())
+    print(tf.config.experimental.list_physical_devices())
     # my_devices = tf.config.experimental.list_physical_devices(device_type='CPU')
     # tf.config.experimental.set_visible_devices(devices= my_devices, device_type='CPU') 
     for gpu in tf.config.experimental.list_physical_devices('GPU'):
-        log.debug("cuda is available " + str(len(gpus)))
+        print("cuda is available " + str(len(gpus)))
         devices.append(gpu.name)
-        device = gpus[0].name
+        device_name = gpus[0].name
     else:
         print("cuda is not available")
         # device = tf.config.experimental.list_physical_devices('CPU')[0].name
     print("devices: " + " ".join(devices))
-    print("device=", device)
+    print("device=", devices[0])
+    device_id = 0    
+    device_name = devices[0]
     tr = False
     gpu = None
     try:
-        gpu = GpuDevice(device, 'GPU_0', log)
+        with open('config/Stream_file_39.yaml', encoding='utf-8') as f:    
+            configStream = yaml.load(f, Loader=yaml.FullLoader)  
+        with open(os.path.join('config', 'Gpu_device0.yaml'), encoding='utf-8') as f:    
+            configGpu = yaml.load(f, Loader=yaml.FullLoader)        
+        gpu = GpuDevice(device_id, device_name, configGpu, log)
         time.sleep(5)
-        gpu.startCam('Stream_39', 0)
+        gpu.startCam(configStream, "file_39", 0)
         #time.sleep(5)
         #gpu.startCam('Stream_43', 0)        
         tr = True
     except:
         print("ecxept!!!!!")
-        log.debug(sys.exc_info())
+        print(sys.exc_info())
         if gpu:
             print("try stop gpu from main")
             gpu.kill()
-    if False:
+    if True:
+        print("cams "+ str(len(gpu.cams)))
         while True:
-            time.sleep(3)
-            log.debug("tik")
             try:
-                log.debug("gpu.cams[0].outFrame "+ str(len(gpu.cams)))
-                for cam in gpu.cams:
+                start = time.time()
+                for i, cam in enumerate(gpu.cams):
                     # print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].get_cur_frame())
                     # print("frame "+ cam.id +" ", cam.cur_frame_cnt)
-                    if gpu.cams[0].outFrame.any():
-                        cv2.imshow(str(cam.id), cam.get_cur_frame())
+                    if gpu.cams[cam].outFrame.any():
+                        cv2.imshow(str(cam), gpu.cams[cam].get_cur_frame())
+                    if gpu.cams[cam].proceedTime[0]:
+                        print("fpsRead_"+str(i), 1.0/(gpu.cams[cam].proceedTime[0]))
+                    if gpu.cams[cam].proceedTime[1]:
+                        print("fpsTrack_"+str(i), 1.0/(gpu.cams[cam].proceedTime[1]))
                 key = cv2.waitKey(1)
                 if key & 0xFF == ord('q'): break
-            except KeyboardInterrupt:
-                log.debug("try to stop from loop main")
-                gpu.kill()
+            except:
+                print("stop by exception")
+                print(sys.exc_info()) 
                 break
     else:
         try:
             time.sleep(60)
         except:
+            print(sys.exc_info())
             gpu.kill()
     print("gpu ", gpu)
     if gpu:
         print("try stop gpu from main")
         gpu.kill()
     cv2.destroyAllWindows()
-    log.debug("Stoped - OK")
+    print("Stoped - OK")
     
