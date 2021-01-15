@@ -8,6 +8,7 @@ import math
 import yaml
 import numpy as np
 import cv2
+import asyncio
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 from deep_sort import nn_matching
@@ -15,6 +16,7 @@ from deep_sort import preprocessing
 import deep_sort.generate_detections as gdet
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
+import server
 
 class VideoCapture:
     def __init__(self, camConfig, gpuConfig, device_id, cam_id, log):        
@@ -68,11 +70,11 @@ class VideoCapture:
                 t.start()
             else:
                 self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
-
+            ws_send_data("hello")
             self._stopevent = threading.Event()
             
         except:
-            self.log.debug("Can not start Vidoe Stream for " + camConfigFile)            
+            self.log.debug("Can not start Vidoe Stream for " + camConfig)            
             print("err types",type(traceback.print_exception(*sys.exc_info())), type(sys.exc_info())) 
             print("VideoStream err:", sys.exc_info())
             self.id = None

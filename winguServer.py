@@ -223,6 +223,18 @@ app.router.add_static('/static', 'static', name='static', append_version=True)
 # end route part
 
 #  background task 
+async def ws_send_data(data):
+    try:
+        if len(app['websocketscmd'])>0:
+            print(" ws start send data!!!!!!!!!!!!!")
+            for client in app['websocketscmd']:
+                try:
+                    await client.send_json({'camera':[1,2,3]})
+                except:
+                    print("ws socket error")
+    except:
+        print(sys.exc_info)
+
 async def background_process():
     while True:
         log.debug('Run background task each 1 min')
