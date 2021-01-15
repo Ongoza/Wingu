@@ -64,7 +64,7 @@ def extract_image_patch(image, bbox, patch_shape):
     image = cv2.resize(image, (64,128))
     # image = cv2.resize(image, tuple(patch_shape[::-1]))
     # print("det",  tuple(patch_shape[::-1]))
-    cv2.imwrite("video/det.jpg", image)
+    # cv2.imwrite("video/det.jpg", image)
     # eee += 1
     
     return image

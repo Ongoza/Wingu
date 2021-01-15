@@ -9,6 +9,7 @@ import math
 import numpy as np
 import cv2
 import tensorflow as tf
+import asyncio
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 
 from tf2_yolov4.anchors import YOLOV4_ANCHORS
@@ -16,6 +17,7 @@ from tf2_yolov4.model import YOLOv4
 
 import videoCapture
 # from server import log
+from wingu_server import ws_send_data, save_statistic
 
 class GpuDevice(threading.Thread):
     def __init__(self, id, device_name, configFile, log):
@@ -57,13 +59,16 @@ class GpuDevice(threading.Thread):
             self.ready = True
             self.log.debug(device_name +" with name "+ str(self.id)+ " created ok id:"+ str(self.id))
             threading.Thread.__init__(self)
-            #t = threading.Thread(target=self._reader)
-            #t.daemon = True
         except:
             print("Can not start GPU for " + str(self.id) + " ", self.config)            
             # traceback.print_exception(*sys.exc_info()) 
             print(sys.exc_info())
             self.kill()
+
+    def run(self):
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self._run())
+        loop.close()
 
     def getCamsList(self):
         # check if cam exists then update cams list and retur it
@@ -113,7 +118,7 @@ class GpuDevice(threading.Thread):
         except:
             print("can not stop some cams")
 
-    def run(self):
+    async def _run(self):
         self.log.debug("GpuDevice starting "+str(self.id))
         while not self._stopevent.isSet():
             start = time.time()
@@ -135,16 +140,13 @@ class GpuDevice(threading.Thread):
                 try:
                     # frame = frames[0]
                     # print("frame rs = ", frames.shape)
-                    # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     # convert numpy opencv to tensor
                     frames_tf = tf.convert_to_tensor(frames, dtype=tf.float32, dtype_hint=None, name=None) / 255.0
                     # print("frames_tf type=", type(frames_tf))
-                    #frames_tf = tf.expand_dims(frames_tf, axis=0) / 255.0
                     boxes, scores, classes, valid_detections = self.detector.predict(frames_tf)            
-                    #    obj_detec = non_max_suppression(obj_detec, self.conf_thres, self.nms_thres)
-                    for j in range(len(frames)):
-                       cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
                     self.proceedTime = time.time() - start
+                    for j in range(len(frames)):
+                       await cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
                 except:
                     self.log.error("GpuDevice "+str(self.id)+" skip frame by exception")
                     print(sys.exc_info(), type(frames_tf))

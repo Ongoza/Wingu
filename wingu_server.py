@@ -43,15 +43,68 @@ test_streams_config =  {'streamsConfigList':
                             ,'file_43': {'id': 'file_43', 'name':'test01', 'url': 'video/43.avi', 'isFromFile': True, 'save_path': 'video/43_out.avi', 'body_min_w': 64, 'path_track': 20, 'body_res': [256, 128], 'display_video_flag': True, 'max_cosine_distance': 0.2, 'save_video_flag': True, 'skip_frames': 2, 'encoder_filename': 'mars-small128.pb', 'batch_size': 32, 'img_size_start': [1600, 1200], 'save_video_res': [720, 540], 'borders': {'border1': [[0, 104], [312, 104]]}}}
                         }
 
+counter = 0
 
+############################################################
+def get_db_path():
+    return "db.wingu.sqlite3"
 
-async def ws_send_data(data, client):
+def init_db():
     try:
-        print("data=", data, client)
-        await client.send_json(test_streams_config)
+        sqlite_db = get_db_path()
+        if os.path.isfile(sqlite_db):
+            print("DB exist ", counter)
+            return
+        conn = sqlite3.connect(sqlite_db)
+        c = conn.cursor()
+        c.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
+        c.execute('CREATE TABLE stats (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, time INTEGER)')
+        c.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, time INTEGER)')
+        #c.execute("INSERT INTO stocks VALUES ('2006-01-05','BUY','RHAT',100,35.14)")
+        conn.commit()
+        conn.close()
+        print("DB is ok ", counter)
+    except:
+        print("db is not ok")
+
+async def save_statistic(type_data, id, data):
+    t = int(time.time())
+    print("data=", type_data, id, data, t)
+    sqlite_db = get_db_path()
+    try:
+        for item in data:
+            sql = f'INSERT INTO {type_data}(border, stream_id, time) VALUES("{item}", "{id}", {int(time.time())})'
+            print("sql", sql)
+            async with aiosqlite.connect(sqlite_db) as db:
+                await db.execute(sql)
+                await db.commit()
+
+        async with aiosqlite.connect(sqlite_db) as db:
+            async with db.execute('SELECT * FROM intersetions') as cursor:
+                rows = await cursor.fetchall()
+                print(rows)
+            # await db.execute("SELECT COUNT(*) FROM intersetions");
+    except:
+        print("save data")
+        print(sys.exc_info())
+
+async def ws_send_data(client, data, binary=False):
+    try:
+        print("data=", len(data), client)
+        if binary:
+            await client.send_bytes(data)
+        else:
+            await client.send_json(data)
+        return True
     except:
         print("ws_send_data error")
         print(sys.exc_info())
+        try:
+            await client.send_json({'error':["can not send data"]})
+        except:
+            print("ws_send_data error in except")
+
+
 
 async def saveConfig(ws, config):
     res = {'OK':["saveConfig", config['tp'], config['name']]}
@@ -73,6 +126,7 @@ async def saveConfig(ws, config):
 
 class Server:
     def __init__(self):
+        init_db()
         self.managerConfigFile = "default" 
         self.log = logging.getLogger('app')
         self.log.setLevel(logging.DEBUG)
@@ -111,21 +165,23 @@ class Server:
         self.app['static_root_url'] = '/static'
         self.app.router.add_static('/static', 'static', name='static', append_version=True)
         # app.router.add_static('/', 'index', name='static')
-        # end route part
-
-        self.try_make_db()
+        # end route part        
         self.app.on_cleanup.append(self.on_shutdown)
         self.app['websocketscmd'] = set()
         #  start cameras manager Object
         print("starting GPU manager")
-        # app['manager'] = set()
+        self.app.on_startup.append(self.start_background_tasks)
+        self.app.on_cleanup.append(self.cleanup_background_tasks)
+        #self.app.cleanup_ctx.append(self.init_db)
+        #time.sleep(2)
+        #print("db", self.app)
+        #self.app['manager'] = set()
         self.app['manager'] = gpusManager.Manager(self.managerConfigFile)
-        #time.sleep(10)
-        self.app.cleanup_ctx.append(self.init_db)
 
         # manager.daemon = True
         self.log.info('Running...')
         web.run_app(self.app)
+
         #  Stop cameras manager Object
         if 'manager' in self.app:
             self.app['manager'].kill()
@@ -186,7 +242,15 @@ class Server:
                         await saveConfig(ws, msg_json['config'])
                     elif msg_json['cmd'] == 'startStream':
                         print("startStream", msg_json['stream_id'])
-                        await ws.send_json({'OK':["startStream", msg_json['stream_id']]})
+                        if 'manager' in self.app:
+                            try:
+                               res = await self.app['manager'].startStream(ws, msg_json['stream_id'])
+                               if res:
+                                await ws.send_json({'OK':["startStream", msg_json['stream_id']]})
+                               else:
+                                await ws.send_json({'error':["startStream", msg_json['stream_id'], "skip by manager"]})
+                            except:
+                                await ws.send_json({'error':["startStream", msg_json['stream_id'], "exception on server"]})
                     elif msg_json['cmd'] == 'startGetStream':
                         print("startGetStream", msg_json['stream_id'])
 
@@ -259,72 +323,67 @@ class Server:
         #  background task 
 
     async def background_process(self):
+        #await self.try_make_db()
         while True:
             self.log.debug('Run background task each 1 min')
-            print("len websocketscmd:", str(len(self.app['websocketscmd'])))
+            # print("len websocketscmd:", str(len(self.app['websocketscmd'])))
             try:
-                if 'manager' in self.app:
-                    if any(self.app['manager'].gpusActiveList):
-                        print("cnt=", self.app['manager'].gpusActiveList['test'].cnt)
-                        #app['manager'].camActiveObjList['test'].cnt = 20
-
+                #await save_statistic("intersetions", "file_0", ["border_a","border_b"])
+                print("server tik")
             except:
                 print('Errror')
                 print(sys.exc_info())
-            if len(self.app['websocketscmd'])>0:
-                print("start send back")
-                try:
-                    for client in self.app['websocketscmd']:
-                        await client.send_json({'camera':[1,2,3]})
-                except:
-                    print("Unexpected error:", sys.exc_info()[0])
+            #if len(self.app['websocketscmd'])>0:
+            #    print("start send back")
+            #    try:
+            #        for client in self.app['websocketscmd']:
+            #            await client.send_json({'camera':[1,2,3]})
+            #    except:
+            #        print("Unexpected error:", sys.exc_info()[0])
             else:
                 print("len=0")
-            await asyncio.sleep(6)
+            await asyncio.sleep(60)
 
-        #async def start_background_tasks(app):
-        #    app['dispatch'] = asyncio.create_task(background_process())
+    async def start_background_tasks(self, app):
+        app['dispatch'] = asyncio.create_task(self.background_process())
 
-        #async def cleanup_background_tasks(app):
-        #    app['dispatch'].cancel()
-        #    await app['dispatch']
-        #app.on_startup.append(start_background_tasks)
-        #app.on_cleanup.append(cleanup_background_tasks)
-        #  end background task
-
-    def get_db_path(self):
-        here = Path.cwd()/ settings.DB_PATH
-        return here 
+    async def cleanup_background_tasks(self, app):
+        app['dispatch'].cancel()
+        await app['dispatch']
+      #  end background task 
 
     # db connect
-    async def init_db(self, app: web.Application):
-        sqlite_db = self.get_db_path()
-        db = await aiosqlite.connect(sqlite_db)
-        db.row_factory = aiosqlite.Row
-        app.db = db
-        yield
-        await db.close()
-
+    #async def init_db(self, app: web.Application):
+    #    sqlite_db = get_db_path()
+    #    db = await aiosqlite.connect(sqlite_db)
+    #    db.row_factory = aiosqlite.Row
+    #    self.app.db = db
+    #    yield
+    #    await self.app.db.close()
     # end db connect
 
-    def try_make_db(self):
-        self.log.debug("DB path: " + str(settings.DB_PATH))
-        sqlite_db = self.get_db_path()
-        if sqlite_db.exists():
-            self.log.debug("DB exist")
-            return
-        self.log.debug("creating new DB")
-        with sqlite3.connect(sqlite_db) as conn:
-            cur = conn.cursor()
-
-            # cur.execute(f'CREATE TABLE {MESSAGE_COLLECTION} (id INTEGER PRIMARY KEY, title TEXT, text TEXT, owner TEXT, editor TEXT, image BLOB)')
-            # conn.commit()
-
-            sql = f'CREATE TABLE {settings.USER_COLLECTION} (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT)'
-            print(sql)
-            #log.debug("sql:"+sql)
-            cur.execute(sql)
-            conn.commit()
+    #async def try_make_db(self):
+    #    self.log.debug("DB path: " + str(settings.DB_PATH))
+    #    sqlite_db = get_db_path()
+    #    if sqlite_db.exists():
+    #        self.log.debug("DB exist")
+    #        return
+    #    self.log.debug("creating new DB")
+    #    async with aiosqlite.connect(sqlite_db) as conn:
+    #        # cur = conn.cursor()
+    #        # cur.execute(f'CREATE TABLE {MESSAGE_COLLECTION} (id INTEGER PRIMARY KEY, title TEXT, text TEXT, owner TEXT, editor TEXT, image BLOB)')
+    #        # conn.commit()
+    #        sql_1 = f'CREATE TABLE {settings.USER_COLLECTION} (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT)'
+    #        sql_2 = f'CREATE TABLE {settings.STATS_COLLECTION} (id INTEGER PRIMARY KEY, device TEXT, param TEXT, value TEXT, time Date)'
+    #        sql_3 = f'CREATE TABLE {settings.INTERSECTION_COLLECTION} (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, time Date)'
+    #        print(sql_1)
+    #        #log.debug("sql:"+sql)
+    #        await cur.execute(sql_1)
+    #        # conn.commit()
+    #        await cur.execute(sql_2)
+    #        #conn.commit()
+    #        await cur.execute(sql_3)
+    #        #conn.commit()
 
 
 if __name__ == "__main__":

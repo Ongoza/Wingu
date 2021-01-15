@@ -10,13 +10,14 @@ import yaml
 import cv2
 import nvidia_smi
 #import psutil
+import aiosqlite
 
 import gpuDevice
+
 from wingu_server import ws_send_data
 
 class Manager(threading.Thread):
     def __init__(self, configFileName):
-        threading.Thread.__init__(self)
         self.gpusActiveList = {}  # running devices
         self.gpusList = {} # available devices
         self.gpusConfigList = {} #  devices configs
@@ -29,11 +30,14 @@ class Manager(threading.Thread):
         ch.setLevel(logging.DEBUG)
         ch.setFormatter(f)
         self.log.addHandler(ch)
+        self._stopevent = threading.Event()
         self.isGPU = False
         self.isGpuStarted = False
         try:
             self.config = self.loadConfig(configFileName, 'Gpus_manager_')
             if self.config:
+                self.db_path = "db.wingu.sqlite3"
+                self.db_table_name = "stats"
                 self.config['gpu_configs'] = {}
                 self.config['streams_configs'] = {}
                 print("gpus manager config", self.config)
@@ -73,13 +77,29 @@ class Manager(threading.Thread):
                         if stream in self.config['autotart_streams']:
                             self.log.debug("GPUsmanager try to autostart "+ stream)
                             self.startStream(stream)
+                self.ready = True
+                threading.Thread.__init__(self)
+                self.start()
             else:
                 self.log.error("GPUsmanager Can not load config gor GPUs Maanger")
-                raise
         except:
             self.log.error("GPUsmanager Can not start gpus manager")
             print(sys.exc_info())
             self.kill()            
+
+    def run(self):
+        # print("GPUsmanager start running!")
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self._run())
+        loop.close()
+
+    async def _run(self):
+        while not self._stopevent.isSet():
+            # print("GPUsmanager tik")
+            # print("data=", type, id, data)
+            #await self.getHardwareStatus()
+            await asyncio.sleep(30)
+        
 
     def updateConfig(self, cfg):
         res = False
@@ -114,24 +134,49 @@ class Manager(threading.Thread):
         return res
 
     async def getStreamsConfig(self, client):
-        await ws_send_data("hello", client)
-        return {'streamsConfigList': self.streamsConfigList}
+        print("test async")
+        await ws_send_data(client, {'streamsConfigList': self.streamsConfigList})
+        # return {'streamsConfigList': self.streamsConfigList}
+
+    def startStream(self, client, cam_id):
+        res = False
+        if cam_id in self.camsList:
+            try:
+                gpu_id = self.camsList[cam_id]
+                # print("check gpu 2", cam_id, gpu_id, self.gpusActiveList[gpu_id].cams)
+                if gpu_id in self.getActiveGpusList():
+                   res = self.gpusActiveList[gpu_id].cams[cam_id].startStream(client)
+            except:
+                self.log.debug("GPUsmanager startStream exception!")
+        return res
 
     def getConfig(self):
         #np.append(uid, np.uint8(device_id))
         return {'managerConfig':self.config, 'gpusConfigList':self.gpusConfigList}
 
-    def getHardwareStatus(self):
-        res = {}
+    async def getHardwareStatus(self):
+        res = []
+        res.append(psutil.cpu_percent()) 
+        res.append(psutil.virtual_memory().percent)
+        res.append(psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
+        res_gpu = []
         if self.isGPU:
             for i in self.camsList:
                 r = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
-                res["GPU_"+str(i)] = {"Gpu":res.gpu, "Mem":res.memory}
-        res["CPU"] = psutil.cpu_percent()
-        res["Mem"] = psutil.virtual_memory().percent
-        res["Mem %"] = psutil.virtual_memory().available * 100 / psutil.virtual_memory().total
+                res_gpu.append[r.cpu]
+                res_gpu.append[r.mem]
+                # res_gpu.append[r.used/r.total]
+        res.append(res_gpu)
+
+        sql = f'INSERT INTO {self.db_table_name}(border, stream_id, time) VALUES("{item}", "{id}", {int(time.time())})'
+        print("sql", sql)
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(sql)
+            await db.commit()
+
+        # stats
         # res["Disk %"] = psutil
-        return res
+        #await save_statistic("stats", 0, res)
 
     def startGpu(self, configFile, device="CPU"):
         # id 0 - CPU, 1 - the first GPU,  etc 
@@ -168,35 +213,35 @@ class Manager(threading.Thread):
         # print("res", res)
         return res
 
-    def getCamFrames(self):
-        res = []
-        for cam_id in self.camsList:
-            fr = self.getCamFrame(cam_id)
-            if fr:
-                res.append(fr)
-            else:
-                self.log.info("GPUsmanager can not take frame for stream: " + cam_id)
-        return res
+    #def getCamFrames(self):
+    #    res = []
+    #    for cam_id in self.camsList:
+    #        fr = self.getCamFrame(cam_id)
+    #        if fr:
+    #            res.append(fr)
+    #        else:
+    #            self.log.info("GPUsmanager can not take frame for stream: " + cam_id)
+    #    return res
 
-    def getCamFrame(self, cam_id):
-        res = None
-        if cam_id in self.camsList:
-            try:
-                gpu_id = self.camsList[cam_id]
-                # print("check gpu 2", cam_id, gpu_id, self.gpusActiveList[gpu_id].cams)
-                if gpu_id in self.getActiveGpusList():
-                    uid = self.gpusActiveList[gpu_id].cams[cam_id].uid
-                    frame = self.gpusActiveList[gpu_id].cams[cam_id].get_cur_frame()
-                    tr, frame_jpg = cv2.imencode('.jpg', frame)
-                    if tr:
-                        res = np.append(frame_jpg, uid)
-                        #with open("video/dd__00.jpg",'wb') as f:
-                        #    f.write(res)
-                        # print("write ok")
-                        # res = frame
-            except:
-                self.error.log("GPUsmanager Can not take frame in Manager! Stream:" + cam_id)
-        return res
+    #def getCamFrame(self, cam_id):
+    #    res = None
+    #    if cam_id in self.camsList:
+    #        try:
+    #            gpu_id = self.camsList[cam_id]
+    #            # print("check gpu 2", cam_id, gpu_id, self.gpusActiveList[gpu_id].cams)
+    #            if gpu_id in self.getActiveGpusList():
+    #                uid = self.gpusActiveList[gpu_id].cams[cam_id].uid
+    #                frame = self.gpusActiveList[gpu_id].cams[cam_id].get_cur_frame()
+    #                tr, frame_jpg = cv2.imencode('.jpg', frame)
+    #                if tr:
+    #                    res = np.append(frame_jpg, uid)
+    #                    #with open("video/dd__00.jpg",'wb') as f:
+    #                    #    f.write(res)
+    #                    # print("write ok")
+    #                    # res = frame
+    #        except:
+    #            self.error.log("GPUsmanager Can not take frame in Manager! Stream:" + cam_id)
+    #    return res
             
     def getCamsStatus(self):
         res =[]
@@ -259,7 +304,8 @@ class Manager(threading.Thread):
             self.log.info("GPUsmanager skip stoped gpu: "+ str(id))
 
     def kill(self):
-        self.log.debug("GPUsmanager try to kill gpus") 
+        self.log.debug("GPUsmanager try to kill gpus")
+        self._stopevent.set()
         for id in self.gpusActiveList.keys():
             try:
                 self.log.debug("GPUsmanager try stop gpu: "+ str(id))
@@ -288,8 +334,8 @@ if __name__ == "__main__":
     gpu_id = list(manager.gpusActiveList.keys())[0]
     print("gpu_id", gpu_id)
     gpu = manager.gpusActiveList[gpu_id]
-    time.sleep(20)
-    print("frame",manager.getCamFrame('file_39'))
+    time.sleep(10)
+    print("frame", gpu.cams[cam].outFrame)
     if gpu:
         while False:
             try:
@@ -298,8 +344,8 @@ if __name__ == "__main__":
                 for i, cam in enumerate(gpu.cams):
                     # print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].outFrame)
                     print("GPUsmanager frame "+ str(cam))
-                    if manager.getCamFrame(cam).any():
-                        cv2.imshow(str(cam), manager.getCamFrame(cam))
+                    if gpu.cams[cam].outFrame.any():
+                        cv2.imshow(str(cam), gpu.cams[cam].outFrame)
                     #if cam.proceedTime[0]:
                     #    print("fpsRead_"+str(i), 1.0/(cam.proceedTime[0]))
                     #if cam.proceedTime[1]:
