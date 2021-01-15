@@ -16,7 +16,7 @@ from deep_sort import preprocessing
 import deep_sort.generate_detections as gdet
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
-import server
+from wingu_server import ws_send_data
 
 class VideoCapture:
     def __init__(self, camConfig, gpuConfig, device_id, cam_id, log):        
@@ -70,7 +70,6 @@ class VideoCapture:
                 t.start()
             else:
                 self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
-            ws_send_data("hello")
             self._stopevent = threading.Event()
             
         except:

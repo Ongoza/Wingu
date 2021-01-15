@@ -2,7 +2,7 @@
 # # add gpu load balanser
 import os, sys, traceback, time
 import queue, threading
-
+import asyncio
 import logging
 import numpy as np
 import tensorflow as tf
@@ -12,6 +12,7 @@ import nvidia_smi
 #import psutil
 
 import gpuDevice
+from wingu_server import ws_send_data
 
 class Manager(threading.Thread):
     def __init__(self, configFileName):
@@ -112,7 +113,8 @@ class Manager(threading.Thread):
                 self.log.error("GPUsmanager Can not load config for " + fileName )
         return res
 
-    def getStreamsConfig(self):
+    async def getStreamsConfig(self, client):
+        await ws_send_data("hello", client)
         return {'streamsConfigList': self.streamsConfigList}
 
     def getConfig(self):
