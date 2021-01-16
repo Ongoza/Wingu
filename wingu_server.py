@@ -146,7 +146,7 @@ class Server:
                 #('GET',  '/camerasList', camerasList),
                 ('GET',  '/getFileImg', self.getFileImg),
                 #('GET',  '/filesList', self.getFilesList),
-                #('POST',  '/addToQueue', self.addToQueue),
+                ('GET',  '/update', self.updateFrame),
                 #('POST',  '/saveConfig', self.saveConfig),
 
             ]
@@ -208,6 +208,19 @@ class Server:
     async def Index(self, request):
         return web.HTTPFound('static/cameras.html')
 
+    async def updateFrame(self, request):
+        try:
+            print("server frame updated")
+            if "manager" in self.app:
+                data = self.app["manager"].getFrame()
+                if data is not None:
+                    data = data.tobytes()
+                    for client in self.app['websocketscmd']:
+                        await client.send_bytes(data)
+        # return web.Response(text="1")
+        except:
+            print(sys.exc_info())
+
     async def WebSocketCmd(self, request):
         ws = web.WebSocketResponse()
         await ws.prepare(request)
@@ -242,6 +255,16 @@ class Server:
                     elif msg_json['cmd'] == 'saveStream':
                         print("saveStream", msg_json['config'])                    
                         await saveConfig(ws, msg_json['config'])
+                    elif msg_json['cmd'] == 'stopGetStream':
+                        print("stopGetStream", msg_json['stream_id'])
+                        if 'manager' in self.app:
+                            try:
+                               await self.app['manager'].stopGetStream(ws, msg_json['stream_id'])
+                            except:
+                                await ws.send_json({'error':["stopStream", msg_json['stream_id'], "exception on server"]})
+                        else:
+                           await ws.send_json({'error':["stopGetStream", msg_json['stream_id'], "mamanger is not running"]})
+
                     elif msg_json['cmd'] == 'startGetStream':
                         print("startGetStream", msg_json['stream_id'])
                         if 'manager' in self.app:

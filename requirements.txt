@@ -9,6 +9,7 @@ envparse
 tqdm
 aiohttp
 aiosqlite
+requests-futures
 aiohttp_session
 tensorflow
 opencv-python

@@ -10,7 +10,7 @@ import numpy as np
 import cv2
 import asyncio
 import aiosqlite
-
+from requests_futures import sessions
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 from deep_sort import nn_matching
@@ -24,10 +24,12 @@ class VideoCapture:
         self.log = log      
         self.log.debug("start init stream object " + str(cam_id))            
         self.totalFrames = 0
+        self.server_URL = "http://localhost:8080/update"
         self.startTime = int(time.time())
         self.cur_frame_cnt = 0
         self.proceed_frames_cnt = 0
         self.proceedTime = [0, 0]
+        self.session = sessions.FuturesSession(max_workers=2)
         self.outFrame = np.array([])
         self.isDrow = False
         self.clients = []
@@ -86,18 +88,26 @@ class VideoCapture:
 
     async def ws_send_data(self):
         try:
-            data = self.outFrame.tobytes()
-            print("VideoStream data=", len(data))
-            for client in self.clients:
-                try:
-                    await client.send_bytes(data)
-                except:
-                    print("VideoStream ws_send_data client error")
-                    print(sys.exc_info())
-                    await client.send_json({'error':["VideoStream","can not send data"]})
+            self.session.get(self.server_URL)
+            #future.result()
+            #print("ok")
         except:
-            print("VideoStream ws_send_data error in except")
-            print(sys.exc_info())
+             pass
+
+    #async def ws_send_data(self):
+    #    try:
+    #        data = self.outFrame.tobytes()
+    #        print("VideoStream data=", len(data))
+    #        for client in self.clients:
+    #            try:
+    #                await client.send_bytes(data)
+    #            except:
+    #                print("VideoStream ws_send_data client error")
+    #                print(sys.exc_info())
+    #                await client.send_json({'error':["VideoStream","can not send data"]})
+    #    except:
+    #        print("VideoStream ws_send_data error in except")
+    #        print(sys.exc_info())
 
     def get_status(self):
         status = {}
@@ -114,10 +124,15 @@ class VideoCapture:
         except: print(sys.exc_info())
         return status
 
+    def stopGetStream(self, client):
+          self.clients = []
+          self.display_video_flag = False
+
     async def startGetStream(self, client):
         print("VideoCapture start stream video")
         if client not in self.clients:
             self.clients.append(client)
+            self.display_video_flag = True
             print("len of clients: ", len(self.clients) )
             try:
                 await client.send_json({'OK':["startGetStream", self.id]})

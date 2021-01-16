@@ -41,7 +41,7 @@
         function stopDisplayStream() {
             console.log("stopDisplayStream");
             name = $('#result_image_stream_name').attr("name");
-            wsCmd.send(JSON.stringify({ "cmd": "stopStream", "stream_id": name }));
+            wsCmd.send(JSON.stringify({ "cmd": "stopGetStream", "stream_id": name }));
             }
         function showFrame(frame) {
             frame_img = URL.createObjectURL(frame);
