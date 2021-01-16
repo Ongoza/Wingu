@@ -20,7 +20,7 @@
     <link href="lib/flag-icon.min.css" rel="stylesheet">
     <link href="js/main.css" rel="stylesheet">
     <script src="lib/jquery-3.5.1.min.js"></script>
-
+    <script src="lib/moment.min.js"></script>
     <script src="lib/bootstrap.min.js"></script>
     <!-- <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
@@ -213,7 +213,7 @@
                 .append($('<tr>').attr('id', "queue_" + name)
                     .append($('<td>').append(count + 1).attr('id', "queue_num_" + (count + 1).toString()))
                     .append($('<td>').append(data['id']).attr('id', "queue_name_" + name))
-                    .append($('<td>').append(data['startTime']).attr('id', "queue_startTime_" + name))
+                    .append($('<td>').append(moment.unix(data['startTime']).format()).attr('id', "queue_startTime_" + name))
                     .append($('<td>').append(data['cur_frame_cnt']).attr('id', "queue_cur_frame_cnt_" + name))
                     .append($('<td>').append(data['proceed_frames_cnt']).attr('id', "queue_proceed_frames_cnt_" + name))
                     .append($('<td>').append(data['skip_frames']).attr('id', "queue_skip_frames_" + name))
