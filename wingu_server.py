@@ -312,6 +312,11 @@ class Server:
             elif msg.type == WSMsgType.ERROR:
                 print('ws connection closed with exception %s' % ws.exception())
         print('websocket connection closed')
+        if 'manager' in self.app:
+            try:
+                await self.app['manager'].stopGetStream(ws, msg_json['stream_id'])
+            except:
+                print("server except stop getstream on clode connection")
         request.app['websocketscmd'].remove(ws)
         return ws
 
@@ -348,6 +353,7 @@ class Server:
             if  'websocketscmd' in app:
                 for ws in self.app['websocketscmd']:
                     await ws.close(code=1001, message='Server shutdown')
+
         except:
             print(sys.exc_info())
 
