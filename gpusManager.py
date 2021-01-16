@@ -14,7 +14,8 @@ import aiosqlite
 
 import gpuDevice
 
-from wingu_server import ws_send_data
+#from wingu_server import ws_send_data
+
 
 class Manager(threading.Thread):
     def __init__(self, configFileName):
@@ -66,17 +67,12 @@ class Manager(threading.Thread):
                         self.gpusConfigList['cpu'] = cfg
                         if self.config['autostart_gpus_list'] != None:
                             self.startGpu(cfg)
-                            time.sleep(3)
                 self.log.debug("GPUsmanager Active GPUs list: "+" ".join(self.gpusActiveList.keys()))
                 for stream in self.config['streams']:
                     stream = str (stream)
                     cfg = self.loadConfig(stream, "Stream_")
                     if cfg != None:
                         self.streamsConfigList[stream] = cfg
-                        # print("cfg",self.streamsConfigList)
-                        if stream in self.config['autotart_streams']:
-                            self.log.debug("GPUsmanager try to autostart "+ stream)
-                            self.startStream(stream)
                 self.ready = True
                 threading.Thread.__init__(self)
                 self.start()
@@ -94,12 +90,22 @@ class Manager(threading.Thread):
         loop.close()
 
     async def _run(self):
+        for stream in self.config['autotart_streams']:
+            try:
+                self.log.debug("GPUsmanager try to autostart "+ stream)
+                await self.startStream(stream)
+            except:
+                self.log.debug("GPUsmanager exception autostart "+ stream)
+
         while not self._stopevent.isSet():
-            # print("GPUsmanager tik")
-            # print("data=", type, id, data)
-            #await self.getHardwareStatus()
-            await asyncio.sleep(30)
-        
+            try:
+                print("GPUsmanager tik")
+                # print("data=", type, id, data)
+                #await self.getHardwareStatus()
+                await asyncio.sleep(30)
+            except:
+                self.log.debug("GPUsmanager run stoped by exception")
+
 
     def updateConfig(self, cfg):
         res = False
@@ -134,21 +140,73 @@ class Manager(threading.Thread):
         return res
 
     async def getStreamsConfig(self, client):
-        print("test async")
-        await ws_send_data(client, {'streamsConfigList': self.streamsConfigList})
-        # return {'streamsConfigList': self.streamsConfigList}
+        try:
+            res = self.getCamsStatus()
+            await client.send_json({'streamsConfigList': self.streamsConfigList, "camsList": res})
+        except:
+            await client.send_json({'error': ["GPUsmanager", "getStreamsConfig"]})
+            print("GPUsmanager send status error")
+            print(sys.exc_info())
 
-    def startStream(self, client, cam_id):
-        res = False
+    async def startStream(self, configName, client=None, device=None):
+        self.log.info("GPUsmanager Start stream "+str(configName)+" on device "+str(device))
+        try:
+            if configName in self.streamsConfigList:
+                config = self.streamsConfigList[configName]
+                if device:
+                    if device in self.getActiveGpusList():
+                        self.gpusActiveList[device].startCam(config, configName, device, client)
+                        self.camsList[configName] = device
+                        self.log.debug("cam add to camsList "+ str(device)+" "+configName)
+                        print("cam add to camsList ", self.camsList)
+                    else:
+                        self.log.info("GPUsmanager Device "+str(device)+" is not availble")
+                else:
+                    devices_cnt = len(self.gpusList)
+                    act_ids = self.getActiveGpusList()
+                    devices_cnt_act = len(act_ids)
+                    print("act_ids", act_ids)
+                    if devices_cnt >= devices_cnt_act:
+                        if devices_cnt == 1:
+                            if devices_cnt_act == 1:
+                                self.gpusActiveList[act_ids[0]].startCam(config, configName, 0, client)
+                                self.camsList[configName] = act_ids[0]
+                                self.log.debug("cam add to camsList "+ str(act_ids[0])+" "+configName)
+                                print("cam add to camsList ", self.camsList)
+                            else:
+                                print("GPUsmanager add device management")
+                                #self.startGpu(self.gpusList[0])
+                                # self.startGpu(self.gpusList[0])
+                                #time.sleep(5)
+                                #self.gpusActiveList[act_ids[0]].startCam(config, 0)
+                        else:
+                            # add GPUs balanser
+                            #self.startGpu(self.gpusList)
+                            #time.sleep(5)
+                            self.gpusActiveList[act_ids[0]].startCam(config, configName, 0, client)
+                            self.camsList[configName] = act_ids[0]
+                    else:
+                        self.log.debug("GPUsmanager Active gpus list is more then ")
+            else:
+                self.log.debug("GPUsmanager any config for " + configName)
+        except:
+            self.log.debug("GPUsmanager Can not start stream!")
+            if client is not None:
+                await ws.send_json({'error':["startStream", configName, "exception on GPUsmanager"]})
+                await ws.send_json({'error':["startStream", configName, "exception on GPUsmanager"]})
+
+    async def startGetStream(self, client, cam_id):
+        self.log.debug("GPUsmanager start get stream " + cam_id)
         if cam_id in self.camsList:
             try:
                 gpu_id = self.camsList[cam_id]
-                # print("check gpu 2", cam_id, gpu_id, self.gpusActiveList[gpu_id].cams)
                 if gpu_id in self.getActiveGpusList():
-                   res = self.gpusActiveList[gpu_id].cams[cam_id].startStream(client)
+                   print("check gpu 3", cam_id, gpu_id)
+                   await self.gpusActiveList[gpu_id].cams[cam_id].startGetStream(client)
             except:
-                self.log.debug("GPUsmanager startStream exception!")
-        return res
+                print(sys.exc_info())
+                self.log.debug("GPUsmanager startGetStream exception!")
+                await ws.send_json({'error':["startGetStream", cam_id, "exception on GPUsmanager"]})
 
     def getConfig(self):
         #np.append(uid, np.uint8(device_id))
@@ -197,11 +255,11 @@ class Manager(threading.Thread):
                 print(sys.exc_info())
             
     def getActiveGpusList(self):
-        print("getActiveGpusList")
+        print("GPUsmanager getActiveGpusList")
         #print("GPUsmanager self.streamsConfigList", self.gpusActiveList)
         res = []
         for gpu_id in self.gpusActiveList.keys():
-            print("key", gpu_id, self.gpusActiveList[gpu_id])
+            print("GPUsmanager key", gpu_id, self.gpusActiveList[gpu_id])
             try:
                 if self.gpusActiveList[gpu_id].device:
                     res.append(gpu_id)
@@ -244,67 +302,28 @@ class Manager(threading.Thread):
     #    return res
             
     def getCamsStatus(self):
-        res =[]
-        for gpu_id in self.getActiveGpusList():
-            try:
-                print("GPUsmanager check cams in gpu", gpu_id)
-                for cam in self.gpusActiveList[gpu_id].getCamsList():
-                    res.append(cam.get_status)
-            except:
-                self.error.log("GPUsmanager Can not take status GPU in Manager! GPU:" + gpu_id)
+        res = []
+        try:
+            gpu_ids = self.getActiveGpusList()
+            for gpu_id in gpu_ids:
+                cams = self.gpusActiveList[gpu_id].getCamsList()
+                for cam in cams:
+                    res.append(self.gpusActiveList[gpu_id].cams[cam].get_status())
+        except:
+            self.log.debug("GPUsmanager Can not take status GPU in Manager! GPU:" + gpu_id)
+            print(sys.exc_info())
         return res
 
-    def startStream(self, configName, device=None):
-        self.log.info("GPUsmanager Start stream "+str(configName)+" on device "+str(device))
-        if configName in self.streamsConfigList:
-            config = self.streamsConfigList[configName]
-            if device:
-                if device in self.getActiveGpusList():
-                    self.gpusActiveList[device].startCam(config, configName, device)
-                    self.camsList[configName] = device
-                    self.log.debug("cam add to camsList "+ str(device)+" "+configName)
-                    print("cam add to camsList ", self.camsList)
-                else:
-                    self.log.info("GPUsmanager Device "+str(device)+" is not availble")
-            else:
-                devices_cnt = len(self.gpusList)
-                act_ids = self.getActiveGpusList()
-                devices_cnt_act = len(act_ids)
-                print("act_ids", act_ids)
-                if devices_cnt >= devices_cnt_act:
-                    if devices_cnt == 1:
-                        if devices_cnt_act == 1:
-                            self.gpusActiveList[act_ids[0]].startCam(config, configName, 0)
-                            self.camsList[configName] = act_ids[0]
-                            self.log.debug("cam add to camsList "+ str(act_ids[0])+" "+configName)
-                            print("cam add to camsList ", self.camsList)
-                        else:
-                            print("GPUsmanager add device management")
-                            #self.startGpu(self.gpusList[0])
-                            # self.startGpu(self.gpusList[0])
-                            #time.sleep(5)
-                            #self.gpusActiveList[act_ids[0]].startCam(config, 0)
-                    else:
-                        # add GPUs balanser
-                        #self.startGpu(self.gpusList)
-                        #time.sleep(5)
-                        self.gpusActiveList[act_ids[0]].startCam(config, configName, 0)
-                        self.camsList[configName] = act_ids[0]
-                else:
-                    self.log.debug("GPUsmanager Active gpus list is more then ")
-        else:
-            self.log.debug("GPUsmanager any config for " + configName)
-                
-    def stopGpu(self, id):
-        if id in self.gpusActiveList:
-            self.gpusActiveList[id].kill()
-            del self.gpusActiveList[id]
-            self.log.info("GPUsmanager stoped gpu: "+ str(id))
-        else:
-            self.log.info("GPUsmanager skip stoped gpu: "+ str(id))
+    #def stopGpu(self, id):
+    #    if id in self.gpusActiveList:
+    #        self.gpusActiveList[id].kill()
+    #        del self.gpusActiveList[id]
+    #        self.log.info("GPUsmanager stoped gpu: "+ str(id))
+    #    else:
+    #        self.log.info("GPUsmanager skip stoped gpu: "+ str(id))
 
     def kill(self):
-        self.log.debug("GPUsmanager try to kill gpus")
+        self.log.debug("GPUsmanager try to stop")
         self._stopevent.set()
         for id in self.gpusActiveList.keys():
             try:
@@ -332,10 +351,9 @@ if __name__ == "__main__":
         print("GPUs:", manager.gpusActiveList)
     # print("config",manager.getConfig())
     gpu_id = list(manager.gpusActiveList.keys())[0]
-    print("gpu_id", gpu_id)
     gpu = manager.gpusActiveList[gpu_id]
     time.sleep(10)
-    print("frame", gpu.cams[cam].outFrame)
+    print("frame", gpu.cams[cam].id)
     if gpu:
         while False:
             try:

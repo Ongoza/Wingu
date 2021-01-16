@@ -18,13 +18,13 @@ from deep_sort import preprocessing
 import deep_sort.generate_detections as gdet
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
-from wingu_server import ws_send_data
 
 class VideoCapture:
-    def __init__(self, camConfig, gpuConfig, device_id, cam_id, log):        
+    def __init__(self, camConfig, gpuConfig, device_id, cam_id, log, client=None):        
         self.log = log      
         self.log.debug("start init stream object " + str(cam_id))            
         self.totalFrames = 0
+        self.startTime = int(time.time())
         self.cur_frame_cnt = 0
         self.proceed_frames_cnt = 0
         self.proceedTime = [0, 0]
@@ -76,37 +76,62 @@ class VideoCapture:
             else:
                 self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
             self._stopevent = threading.Event()
-            
+            if client is not None:
+                client.send_json({'OK':["startStream", self.id]})
         except:
-            self.log.debug("Can not start Vidoe Stream for " + camConfig)            
-            print("err types",type(traceback.print_exception(*sys.exc_info())), type(sys.exc_info())) 
+            self.log.debug("VideoStream Can not start Video Stream for " + camConfig)            
+            print("VideoStream err types",type(traceback.print_exception(*sys.exc_info())), type(sys.exc_info())) 
             print("VideoStream err:", sys.exc_info())
             self.id = None
 
-    def get_status(self):
-        return {
-            "id":self.id, 
-            "save_video_res":self.save_video_res,
-            "device_id":self.device_id,
-            "skip_frames":self.skip_frames,
-            "display_video_flag":self.display_video_flag,
-            "cur_frame_cnt": self.cur_frame_cnt,
-            "proceed_frames_cnt": self.proceed_frames_cnt,
-            "totalFrames": self.totalFrames
-            }
+    async def ws_send_data(self):
+        try:
+            data = self.outFrame.tobytes()
+            print("VideoStream data=", len(data))
+            for client in self.clients:
+                try:
+                    await client.send_bytes(data)
+                except:
+                    print("VideoStream ws_send_data client error")
+                    print(sys.exc_info())
+                    await client.send_json({'error':["VideoStream","can not send data"]})
+        except:
+            print("VideoStream ws_send_data error in except")
+            print(sys.exc_info())
 
-    def startStream(self, client):
-        res = False
+    def get_status(self):
+        status = {}
+        try:
+            status["id"] = self.id
+            status["startTime"] = self.startTime
+            status["save_video_res"] = self.save_video_res
+            status["device_id"] = self.device_id
+            status["skip_frames"] = self.skip_frames
+            status["save_video_flag"] = self.save_video_flag
+            status["cur_frame_cnt"] = self.cur_frame_cnt
+            status["proceed_frames_cnt"] = self.proceed_frames_cnt
+            status["totalFrames"] = self.totalFrames
+        except: print(sys.exc_info())
+        return status
+
+    async def startGetStream(self, client):
+        print("VideoCapture start stream video")
         if client not in self.clients:
-            self.clients.append()
-            res = True
-        return res
+            self.clients.append(client)
+            print("len of clients: ", len(self.clients) )
+            try:
+                await client.send_json({'OK':["startGetStream", self.id]})
+            except:
+                print("VideoCapture exception in startGet Stream")
+                await client.send_json({'error':["startGetStream", self.id, "exception on VideoCapture"]})
+        else:
+            await client.send_json({'OK':["startGetStream", self.id, "one more times"]})            
 
     def send_cur_frame(self):
         return self.outFrame   
 
     async def save_statistic(self, borders_arr):
-        print("start save stat in stream")
+        print("VideoCapture start save stat in stream")
         try:
             for borders in borders_arr:
                 for item in borders:
@@ -116,7 +141,8 @@ class VideoCapture:
                         await db.execute(sql)
                         await db.commit()
         except:
-            self.log.debug("Error save data")
+            self.log.debug("VideoCapture Error save data")
+
     # read frames as soon as they are available, keeping only most recent one
     # 0. CV_CAP_PROP_POS_MSEC Current position of the video file in milliseconds.
     # 1. CV_CAP_PROP_POS_FRAMES 0-based index of the frame to be decoded/captured next.
@@ -152,7 +178,7 @@ class VideoCapture:
                 self.proceedTime[0] = time.time() - start
                 return frame
             else:
-                self.exit()
+                self.kill()
         else:
             return self.q.get()
 
@@ -261,7 +287,7 @@ class VideoCapture:
             if res:
                  await self.save_statistic(res)
             if self.clients:
-                #self.log.debug("save")
+                self.log.debug("save")
                 if(not self.save_video_flag):
                     frame = self.drawBorderLines(frame)
                     cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, (255, 255, 0), 1)
@@ -270,14 +296,12 @@ class VideoCapture:
                     frame = cv2.resize(frame, self.save_video_res)
                     # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 ret2, frame_jpg = cv2.imencode(".jpg", frame)
-                self.outFrame = np.copy(frame)
                 if(ret2):
-                    res = np.append(frame_jpg, self.uid).tobytes()
+                    self.outFrame = np.copy(frame_jpg)
                     # self.outFrame = iWeb.tobytes()
-                    with open("video/dd__00_1.jpg",'wb') as f:
-                        f.write(res)
-                    for client in self.clients:
-                        await ws_send_data(client, res, True)
+                    #with open("video/dd__00_1.jpg",'wb') as f:
+                    #    f.write(res)
+                    await self.ws_send_data()
             self.proceedTime[1] = time.time() - start
         except:
             print(sys.exc_info())

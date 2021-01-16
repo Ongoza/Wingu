@@ -17,7 +17,7 @@ from tf2_yolov4.model import YOLOv4
 
 import videoCapture
 # from server import log
-from wingu_server import ws_send_data, save_statistic
+# from wingu_server import ws_send_data, save_statistic
 
 class GpuDevice(threading.Thread):
     def __init__(self, id, device_name, configFile, log):
@@ -57,8 +57,10 @@ class GpuDevice(threading.Thread):
             self.img_size = self.config['img_size']
             self._stopevent = threading.Event()
             self.ready = True
+            # self.isRunning = False
             self.log.debug(device_name +" with name "+ str(self.id)+ " created ok id:"+ str(self.id))
             threading.Thread.__init__(self)
+            self.start()
         except:
             print("Can not start GPU for " + str(self.id) + " ", self.config)            
             # traceback.print_exception(*sys.exc_info()) 
@@ -74,35 +76,37 @@ class GpuDevice(threading.Thread):
         # check if cam exists then update cams list and retur it
         return self.cams
 
-    def startCam(self, camConfig, cam_id, iter):
-        if iter < 100:
-            # print('try to start video: ', camConfig, iter)
-            iter += 1
-            #id, url, borders, skipFrames, max_cosine_distance, nn_budget
-            if self.ready:
-                cam =  videoCapture.VideoCapture(camConfig, self.config, self.id, cam_id, self.log)
-                if cam.id:
-                    self.cams[cam_id] = cam
-                    self.log.debug("GpuDevice "+str(self.device)+" Current num of cameras:" + str(len(self.cams)))
-                    if(len(self.cams) == 1 ):
-                        self.start()
-                else:
-                   self.log.info("GpuDevice "+str(self.id)+" can not start Stream")
-            else:                
-                time.sleep(1)
-                self.startCam(camConfig, cam_id, iter)
-        else:
-            self.log.info("GpuDevice "+str(self.id)+" is not ready for start too long time!!")
+    def startCam(self, camConfig, cam_id, iter, client=None):
+        try:
+            if iter < 100:
+                # print('try to start video: ', camConfig, iter)
+                iter += 1
+                #id, url, borders, skipFrames, max_cosine_distance, nn_budget
+                if self.ready:
+                    #if(len(self.cams) == 1 ):
+                    #    self.start()
+                    #    time.sleep(3)
+                    cam =  videoCapture.VideoCapture(camConfig, self.config, self.id, cam_id, self.log, client)
+                    if cam.id:
+                        self.cams[cam_id] = cam
+                        self.log.debug("GpuDevice "+str(self.device)+" Current num of cameras:" + str(len(self.cams)))
+                    else:
+                       self.log.info("GpuDevice "+str(self.id)+" can not start Stream")
+                else:                
+                    time.sleep(1)
+                    self.startCam(camConfig, cam_id, iter, client)
+            else:
+                self.log.info("GpuDevice "+str(self.id)+" is not ready for start too long time!!")
+        except:
+            self.log.debug("GpuDevice "+str(self.id)+" exception on stream start")
 
     def stopCam(self, id):
         self.log.debug("GpuDevice "+str(self.id)+'stop video: '+str(id))
-        self.cams[id].exit()
-        time.sleep(0.1)
-        del self.cams[id]
-        if(len(self.cams)==0):
-            print("Any cameras are not present!")
-            time.sleep(0.5)
-            self.kill()
+        try:
+            self.cams[id].kill()
+            del self.cams[id]
+        except:
+            self.log.debug("GpuDevice can not stop cam "+ id)
 
     def kill(self):
         try:
@@ -113,6 +117,7 @@ class GpuDevice(threading.Thread):
                 print("try stop cam" + cam)
                 self.cams[cam].kill()
                 print("cams num:", len(self.cams))
+            time.sleep(4)
             self.log.info("GPU "+str(self.id)+" stopped")        
             self.killed = True
         except:
@@ -121,6 +126,7 @@ class GpuDevice(threading.Thread):
     async def _run(self):
         self.log.debug("GpuDevice starting "+str(self.id))
         while not self._stopevent.isSet():
+            # print("GpuDevice tik")
             start = time.time()
             self.cnt += 1
             frames = []
@@ -150,9 +156,9 @@ class GpuDevice(threading.Thread):
                 except:
                     self.log.error("GpuDevice "+str(self.id)+" skip frame by exception")
                     print(sys.exc_info(), type(frames_tf))
-            else:
-                self.log.info("GpuDevice Any available streams in GPU "+str(self.id))
-                self.kill()
+            # else:
+                # self.log.info("GpuDevice Any available streams in GPU "+str(self.id))
+                # self.kill()
                 
 
 

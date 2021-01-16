@@ -224,8 +224,10 @@ class Server:
                     elif msg_json['cmd'] == 'getStreamsConfig':
                          if "manager" in self.app:
                             await self.app["manager"].getStreamsConfig(ws)
-                         #data = test_streams_config                    
-                         # await ws.send_json(data)
+                            # data = test_streams_config                    
+                            # await ws.send_json(data)
+                         else:
+                            await ws.send_json({'error':['getStreamsConfig', msg.data]})                             
                     elif msg_json['cmd'] == 'getManagerData':
                         if True:
                         # if "manager" in app:
@@ -240,21 +242,27 @@ class Server:
                     elif msg_json['cmd'] == 'saveStream':
                         print("saveStream", msg_json['config'])                    
                         await saveConfig(ws, msg_json['config'])
+                    elif msg_json['cmd'] == 'startGetStream':
+                        print("startGetStream", msg_json['stream_id'])
+                        if 'manager' in self.app:
+                            try:
+                               await self.app['manager'].startGetStream(ws, msg_json['stream_id'])
+                            except:
+                                await ws.send_json({'error':["startStream", msg_json['stream_id'], "exception on server"]})
+                        else:
+                           await ws.send_json({'error':["startGetStream", msg_json['stream_id'], "mamanger is not running"]})
                     elif msg_json['cmd'] == 'startStream':
                         print("startStream", msg_json['stream_id'])
                         if 'manager' in self.app:
                             try:
-                               res = await self.app['manager'].startStream(ws, msg_json['stream_id'])
-                               if res:
-                                await ws.send_json({'OK':["startStream", msg_json['stream_id']]})
-                               else:
-                                await ws.send_json({'error':["startStream", msg_json['stream_id'], "skip by manager"]})
+                               await self.app['manager'].startStream(msg_json['stream_id'], ws)
                             except:
+                                print(sys.exc_info())
                                 await ws.send_json({'error':["startStream", msg_json['stream_id'], "exception on server"]})
-                    elif msg_json['cmd'] == 'startGetStream':
-                        print("startGetStream", msg_json['stream_id'])
+                        else:
+                           await ws.send_json({'error':["startStream", msg_json['stream_id'], "mamanger is not running"]})
 
-                        await ws.send_json({'OK':["startGetStream", msg_json['stream_id']]})
+                        # await ws.send_json({'OK':["startStream", msg_json['stream_id']]})
                     #elif msg_json['cmd'] == 'getCameras':
                     #    # print(camerasListData)
                     #    await ws.send_json(camerasListData)

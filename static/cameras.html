@@ -38,12 +38,34 @@
         var curQeuensDisplay = [];
         divNewCamera.innerHTML = "";
 
+        function stopDisplayStream() {
+            console.log("stopDisplayStream");
+            name = $('#result_image_stream_name').attr("name");
+            wsCmd.send(JSON.stringify({ "cmd": "stopStream", "stream_id": name }));
+            }
+        function showFrame(frame) {
+            frame_img = URL.createObjectURL(frame);
+            //(frame).arrayBuffer().then(value => {
+            //    console.log("blob recieved 2 ", value);
+            //    let arr = new Uint8Array(value);
+            //    let id = arr[arr.length - 8]
+            //    console.log("id=", id);
+            //    $('#result_image_stream_name').val(id)
+            // });
+            $('#result_image_stream').attr('src', frame_img);
+
+        }
+
         function showStream(id) {
             try {
-                console.log("showStream", id);
-                let arr = id.split('_');
-                wsCmd.send(JSON.stringify({ "cmd": "startGetStream", "stream_id": arr[3] }));
-                curQeuensDisplay.push(arr[3]);
+                name = id.substring(11); // queue_show_
+                console.log("showStream", id, name);
+                wsCmd.send(JSON.stringify({ "cmd": "startGetStream", "stream_id": name }));
+                // curQeuensDisplay.push(name);
+                $('#camModalDisplay').modal('show');
+                console.log("Name", name, id)
+                $('#result_image_stream_name').text(name);
+                $('#result_image_stream_name').attr("name", name);
             } catch (e) {
                 console.log(e);
             }
@@ -64,9 +86,11 @@
             try {
                 if (typeConfig == 'streamsConfigList') {
                     if (localStorage.getItem('streamsConfigList') != null) {
+                        $('#camerasTable').find('tbody').empty();
                         let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
                         // console.log("streamsConfigList", typeof (streamsConfigList), streamsConfigList);
                         for (var name in streamsConfigList) {
+
                             addRow(name, streamsConfigList[name]);
                         };
                         //let gpusConfigList = JSON.parse(localStorage.getItem('gpusConfigList'));
@@ -76,6 +100,19 @@
 
                     } else {
                         console.log("Config is not ready!!");
+                    }
+                } else if (typeConfig == 'camsList') {
+                    console.log("start camsList", typeConfig)
+                    $('#runningStreams').find('tbody').empty();
+                    if (localStorage.getItem('camsList') != null) {
+                        let camsList = JSON.parse(localStorage.getItem('camsList'));
+                        console.log("camsList", typeof (camsList), camsList);
+                        for (var i in camsList) {
+                            addRowRunning(i, camsList[i]);
+                        };
+                    } else {
+                        console.log("Config is not ready!!");
+
                     }
                 } else {
                     console.log("wrong type config!!");
@@ -150,6 +187,41 @@
             $('#content').empty();
             $('#content').append(divTable);
         }
+        function addRowRunning(i, data) {
+            name = data['id']
+            console.log("add running row", i, data['id']);
+            let count = $('#runningStreams').find('tbody').children().length;
+            //    <th scope="col">#</th>
+            //    <th scope="col">Name</th>
+            //    <th scope="col">Started</th>
+            //    <th scope="col">Done (frames)</th>
+            //    <th scope="col">Device</th>
+            //    <th scope="col">Finished in (min)</th>
+            //    <th scope="col">File(size)</th>
+            //    <th scope="col">Stop</th>
+            //    <th scope="col">Display</th>
+            // "id": self.id,
+            // "startTime": self.startTime,
+            // "save_video_res": self.save_video_res,
+            // "device_id": self.device_id,
+            // "skip_frames": self.skip_frames,
+            // "save_video_flag": self.display_video_flag,
+            // "cur_frame_cnt": self.cur_frame_cnt,
+            // "proceed_frames_cnt": self.proceed_frames_cnt,
+            // "totalFrames": self.totalFrames
+            $('#runningStreams').find('tbody')
+                .append($('<tr>').attr('id', "queue_" + name)
+                    .append($('<td>').append(count + 1).attr('id', "queue_num_" + (count + 1).toString()))
+                    .append($('<td>').append(data['id']).attr('id', "queue_name_" + name))
+                    .append($('<td>').append(data['startTime']).attr('id', "queue_startTime_" + name))
+                    .append($('<td>').append(data['cur_frame_cnt']).attr('id', "queue_cur_frame_cnt_" + name))
+                    .append($('<td>').append(data['proceed_frames_cnt']).attr('id', "queue_proceed_frames_cnt_" + name))
+                    .append($('<td>').append(data['skip_frames']).attr('id', "queue_skip_frames_" + name))
+                    .append($('<td>').append(data['totalFrames']).attr('id', "queue_totalFrames_" + name))
+                    .append($('<td>').append('<a href="#" onclick="showStream(this.parentElement.id);" >Show</a>').attr('id', "queue_show_" + name))
+
+                );
+        }
 
         function addRow(name, data) {
             console.log("add row", name, data['id']);
@@ -177,27 +249,27 @@
         let divTable = document.createElement('div');
         divTable.id = 'camerasTableDiv';
         divTable.innerHTML = `<table id="camerasTable" class="table table-striped table-hover table-sm table-bordered">
-                            <thead class="thead-dark">
-                            <tr>
-                            <th scope="col">#</th>
-                            <th scope="col">ID</th>
-                            <th scope="col">Name</th>
-                            <th scope="col">URL</th>
-                            <th scope="col">SaveToFile</th>
-                            <th scope="col">Display</th>
-                            <th scope="col">Borders</th>
-                            <th scope="col">Run|Stop</th>
-                            <th scope="col">Edit</th>
-                            <th scope="col">Delete</th>
-                            </tr>
-                            </thead>
-                            <tbody id='camerasTableBody'></tbody>
-                            </table>
-                            <div class="btn-group" role="group" aria-label="">
-                                <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCamera(); return false;">New camera</button>
-                                <button type="button" class="btn btn-secondary"  onclick="curCamId = null; confCameraFile(); return false;">New local file</button>
-                            </div>
-                            `;
+                                            <thead class="thead-dark">
+                                            <tr>
+                                            <th scope="col">#</th>
+                                            <th scope="col">ID</th>
+                                            <th scope="col">Name</th>
+                                            <th scope="col">URL</th>
+                                            <th scope="col">SaveToFile</th>
+                                            <th scope="col">Display</th>
+                                            <th scope="col">Borders</th>
+                                            <th scope="col">Run|Stop</th>
+                                            <th scope="col">Edit</th>
+                                            <th scope="col">Delete</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody id='camerasTableBody'></tbody>
+                                            </table>
+                                            <div class="btn-group" role="group" aria-label="">
+                                                <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCamera(); return false;">New camera</button>
+                                                <button type="button" class="btn btn-secondary"  onclick="curCamId = null; confCameraFile(); return false;">New local file</button>
+                                            </div>
+                                            `;
         //function getCamerasList() {
         //    if (wsCmd != null) {
         //        if (wsCmd.readyState == 1) {
@@ -279,36 +351,21 @@
         <div class="card">
             <div class="card-header">Local files proceeding queue</div>
             <div class="card-body">
-                <table class="table text-center table-sm">
+                <table class="table text-center table-sm" id="runningStreams">
                     <thead class="thead-dark">
                         <tr>
                             <th scope="col">#</th>
-                            <th scope="col">Path</th>
-                            <th scope="col">Size (MB)</th>
-                            <th scope="col">Done (%)</th>
-                            <th scope="col">Working (min)</th>
+                            <th scope="col">Name</th>
+                            <th scope="col">Started</th>
+                            <th scope="col">Done (frames)</th>
+                            <th scope="col">Device</th>
                             <th scope="col">Finished in (min)</th>
+                            <th scope="col">File(size)</th>
                             <th scope="col">Stop</th>
-                            <th scope="col">Up|Down</th>
                             <th scope="col">Display</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr id="0_queue">
-                            <td id="0_queue_n">1</td>
-                            <td id="0_queue_path">39.avi</td>
-                            <td id="0_queue_size">0</td>
-                            <td>
-                                <div class="progress"><div id="0_queue_done" class="progress-bar" role="progressbar" style="width:10%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div></div>
-                                <!-- $('0_queue_done').css('width', valeu+'%').attr('aria-valuenow', valeu); -->
-                            </td>
-                            <td id="0_queue_proceed">0</td>
-                            <td id="0_queue_finish">0</td>
-                            <td><a href="#" style="color:red"><span class="fas fa-minus-circle"></span></a></td>
-                            <td><a href="#" id="0_queue_n"><span class="fas fa-chevron-up"></span></a>&nbsp;&nbsp;<a href="#"><span class="fas fa-chevron-down"></span></a></a></td>
-                            <td><a href="#" id ="0_queue_show_39 " onclick="showStream(this.id);" >Show</a></td>
-                        </tr>
-                    </tbody>
+                    <tbody></tbody>
                 </table>
             </div>
         </div>
@@ -316,7 +373,7 @@
         <div id="content">
 
         </div>
-        <!-- Modal -->
+        <!-- Modal Editor-->
         <div class="modal fade" id="camModal" tabindex="-1" role="dialog" aria-labelledby="ModalDelete" aria-hidden="true">
             <div class="modal-dialog" role="document">
                 <div class="modal-content">
@@ -336,5 +393,28 @@
                 </div>
             </div>
         </div>
+
+        <!-- Modal Display-->
+        <div class="modal fade" id="camModalDisplay" tabindex="-1" role="dialog" aria-labelledby="ModalDisplay" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="ModalDisplay">Stream from camera <span id="result_image_stream_name"></span></h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="fileModalImgDiv" style="display:flex;margin:5;border:2px solid #00ffff;background-repeat:no-repeat;">
+                            <img id="result_image_stream" src="" style="height:100%;width:100%;position: flex;">
+                        </div>
+                    </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="stopDisplayStream();">Close</button>
+                        </div>
+                    </div>
+            </div>
+        </div>
+
 </body>
 </html>
