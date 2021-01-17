@@ -115,7 +115,8 @@ class GpuDevice(threading.Thread):
             cams = list(self.cams.keys())
             for cam in cams:
                 print("try stop cam" + cam)
-                self.cams[cam].kill()
+                self.stopCam(cam)
+                # self.cams[cam].kill()
                 print("cams num:", len(self.cams))
             time.sleep(4)
             self.log.info("GPU "+str(self.id)+" stopped")        
@@ -133,7 +134,9 @@ class GpuDevice(threading.Thread):
             cams = []
             for cam in self.cams:
                 if self.cams[cam]._stopevent.isSet():
-                    self.log.debug("GpuDevice cam stopped: ", cam)
+                    # self.log.debug("GpuDevice cam stopped: " + cam)
+                    self.cams[cam].kill()
+                    del self.cams[cam]
                     #delete cam from cams list
                     pass
                 else:

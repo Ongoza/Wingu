@@ -29,13 +29,16 @@ function WebSocketCmd() {
                            for (var item in jsonData) {
                                switch (item) {
                                    case 'streamsConfigList': {
-                                           console.log("cameras list updating...");
-                                           localStorage.setItem('streamsConfigList', JSON.stringify(jsonData['streamsConfigList']));
-                                           configViewUpdate('streamsConfigList');
+                                       console.log("cameras list updating...");
+                                       localStorage.setItem('streamsConfigList', JSON.stringify(jsonData['streamsConfigList']));
+                                       configViewUpdate('streamsConfigList');
+                                       configViewUpdate('camsList');
+
                                            break;
                                        }
-                                   case 'Ok': {
+                                   case 'OK': {
                                        console.log("OK!", jsonData);
+                                       updateViewOk(jsonData);
                                        break;
                                    }
                                    case 'error': {

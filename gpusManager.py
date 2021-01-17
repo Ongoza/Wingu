@@ -153,7 +153,7 @@ class Manager(threading.Thread):
             res = self.getCamsStatus()
             await client.send_json({'streamsConfigList': self.streamsConfigList, "camsList": res})
         except:
-            await client.send_json({'error': ["GPUsmanager", "getStreamsConfig"]})
+            await client.send_json({"error": ["GPUsmanager", "getStreamsConfig"]})
             print("GPUsmanager send status error")
             print(sys.exc_info())
 
@@ -201,16 +201,30 @@ class Manager(threading.Thread):
         except:
             self.log.debug("GPUsmanager Can not start stream!")
             if client is not None:
-                await client.send_json({'error':["startStream", configName, "exception on GPUsmanager"]})
+                await client.send_json({"error":["startStream", configName, "exception on GPUsmanager"]})
+
+    async def stopStream(self, cam_id, client=None):
+        try:
+            if cam_id in self.camsList:
+                print("GPUsmanager stop stream ", cam_id, client, self.camsList[cam_id])
+                if self.camsList[cam_id] in self.getActiveGpusList():
+                    print("GPUsmanager stop stream ", cam_id, client, self.camsList[cam_id])
+                    self.gpusActiveList[self.camsList[cam_id]].stopCam(cam_id)
+                    del self.camsList[cam_id]
+                    if client is not None:
+                        await client.send_json({"OK":["stopStream", cam_id]})
+        except: 
+            print(sys.exc_info())
+            await client.send_json({"error":["stopStream", cam_id, "exception on GPUsmanager"]})
 
     async def stopGetStream(self, client, cam_id):
         try:
             res = self.gpusActiveList[self.camIdFrame[0]].cams[self.camIdFrame[1]].stopGetStream(client)
             camIdFrame = []
-            await client.send_json({'OK':["stopGetStream", cam_id]})
+            await client.send_json({"OK":["stopGetStream", cam_id]})
         except: 
             print(sys.exc_info())
-            await client.send_json({'error':["stopGetStream", cam_id, "exception on GPUsmanager"]})
+            await client.send_json({"error":["stopGetStream", cam_id, "exception on GPUsmanager"]})
 
     async def startGetStream(self, client, cam_id):
         self.log.debug("GPUsmanager start get stream " + cam_id)
@@ -224,7 +238,11 @@ class Manager(threading.Thread):
             except:
                 print(sys.exc_info())
                 self.log.debug("GPUsmanager startGetStream exception!")
-                await client.send_json({'error':["startGetStream", cam_id, "exception on GPUsmanager"]})
+                await client.send_json({"error":["startGetStream", cam_id, "exception on GPUsmanager"]})
+
+    def getSreamsStatus(self):
+        res = self.getCamsStatus()
+        return {"camsList": res}
 
     def getConfig(self):
         #np.append(uid, np.uint8(device_id))

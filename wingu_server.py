@@ -100,7 +100,7 @@ async def ws_send_data(client, data, binary=False):
         print("ws_send_data error")
         print(sys.exc_info())
         try:
-            await client.send_json({'error':["can not send data"]})
+            await client.send_json({"error":["can not send data"]})
         except:
             print("ws_send_data error in except")
 
@@ -120,7 +120,7 @@ async def saveConfig(ws, config):
         #    app["manager"].updateConfig(config)
     except:
         #          log.error("Can not save config for " + fileName )
-        #          res = {'error':['saveConfig', config['tp'], config['name']]}
+        #          res = {"error":['saveConfig', config['tp'], config['name']]}
          print(sys.exc_info())
         #    await ws.send_json(res)
 
@@ -224,7 +224,8 @@ class Server:
     async def WebSocketCmd(self, request):
         ws = web.WebSocketResponse()
         await ws.prepare(request)
-        request.app['websocketscmd'].add(ws)    
+        request.app['websocketscmd'].add(ws)
+        await ws.send_json({"OK":["start sever", "event on init connection"] })
         #totalFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
         async for msg in ws:
             if msg.type == WSMsgType.TEXT:
@@ -240,7 +241,7 @@ class Server:
                             # data = test_streams_config                    
                             # await ws.send_json(data)
                          else:
-                            await ws.send_json({'error':['getStreamsConfig', msg.data]})                             
+                            await ws.send_json({"error":['getStreamsConfig', msg.data]})                             
                     elif msg_json['cmd'] == 'getManagerData':
                         if True:
                         # if "manager" in app:
@@ -251,7 +252,7 @@ class Server:
                             await ws.send_json(data)
                         else:
                             print(sys.exc_info())
-                            await ws.send_json({'error':['getManagerData', msg.data]})
+                            await ws.send_json({"error":['getManagerData', msg.data]})
                     elif msg_json['cmd'] == 'saveStream':
                         print("saveStream", msg_json['config'])                    
                         await saveConfig(ws, msg_json['config'])
@@ -261,9 +262,9 @@ class Server:
                             try:
                                await self.app['manager'].stopGetStream(ws, msg_json['stream_id'])
                             except:
-                                await ws.send_json({'error':["stopStream", msg_json['stream_id'], "exception on server"]})
+                                await ws.send_json({"error":["stopStream", msg_json['stream_id'], "exception on server"]})
                         else:
-                           await ws.send_json({'error':["stopGetStream", msg_json['stream_id'], "mamanger is not running"]})
+                           await ws.send_json({"error":["stopGetStream", msg_json['stream_id'], "mamanger is not running"]})
 
                     elif msg_json['cmd'] == 'startGetStream':
                         print("startGetStream", msg_json['stream_id'])
@@ -271,9 +272,9 @@ class Server:
                             try:
                                await self.app['manager'].startGetStream(ws, msg_json['stream_id'])
                             except:
-                                await ws.send_json({'error':["startStream", msg_json['stream_id'], "exception on server"]})
+                                await ws.send_json({"error":["startStream", msg_json['stream_id'], "exception on server"]})
                         else:
-                           await ws.send_json({'error':["startGetStream", msg_json['stream_id'], "mamanger is not running"]})
+                           await ws.send_json({"error":["startGetStream", msg_json['stream_id'], "mamanger is not running"]})
                     elif msg_json['cmd'] == 'startStream':
                         print("startStream", msg_json['stream_id'])
                         if 'manager' in self.app:
@@ -281,9 +282,19 @@ class Server:
                                await self.app['manager'].startStream(msg_json['stream_id'], ws)
                             except:
                                 print(sys.exc_info())
-                                await ws.send_json({'error':["startStream", msg_json['stream_id'], "exception on server"]})
+                                await ws.send_json({"error":["startStream", msg_json['stream_id'], "exception on server"]})
                         else:
-                           await ws.send_json({'error':["startStream", msg_json['stream_id'], "mamanger is not running"]})
+                           await ws.send_json({"error":["startStream", msg_json['stream_id'], "mamanger is not running"]})
+                    elif msg_json['cmd'] == 'stopStream':
+                        print("stopStream", msg_json['stream_id'])
+                        if 'manager' in self.app:
+                            try:
+                               await self.app['manager'].stopStream(msg_json['stream_id'], ws)
+                            except:
+                                print(sys.exc_info())
+                                await ws.send_json({"error":["stopStream", msg_json['stream_id'], "exception on server"]})
+                        else:
+                           await ws.send_json({"error":["stopStream", msg_json['stream_id'], "mamanger is not running"]})
 
                         # await ws.send_json({'OK':["startStream", msg_json['stream_id']]})
                     #elif msg_json['cmd'] == 'getCameras':
@@ -305,10 +316,10 @@ class Server:
                     #    await ws.send_bytes(res.tobytes())
                     else:
                         print("error websocket command")
-                        await ws.send_json({'error':['unknown', msg.data]})
+                        await ws.send_json({"error":['unknown', msg.data]})
                 except:
                     print(sys.exc_info())
-                    await ws.send_json({'error':["can not parse json", msg.data]})
+                    await ws.send_json({"error":["can not parse json", msg.data]})
             elif msg.type == WSMsgType.ERROR:
                 print('ws connection closed with exception %s' % ws.exception())
         print('websocket connection closed')
@@ -338,12 +349,12 @@ class Server:
                     return web.Response(body=res)
                 else:
                     print(fileName,"can not find file")
-                    return web.json_response({'error':["can not find file", fileName]})
+                    return web.json_response({"error":["can not find file", fileName]})
             else:
-                return web.json_response({'error':["can not find file name"]})
+                return web.json_response({"error":["can not find file name"]})
         except:
             print("can not open file")
-            await web.json_response({'error':[fileName,"can not open file"]})
+            await web.json_response({"error":[fileName,"can not open file"]})
 
     async def on_shutdown(self, app):
         try:
@@ -370,16 +381,18 @@ class Server:
             except:
                 print('Errror')
                 print(sys.exc_info())
-            #if len(self.app['websocketscmd'])>0:
-            #    print("start send back")
-            #    try:
-            #        for client in self.app['websocketscmd']:
-            #            await client.send_json({'camera':[1,2,3]})
-            #    except:
-            #        print("Unexpected error:", sys.exc_info()[0])
+            if len(self.app['websocketscmd'])>0:
+                if 'manager' in self.app:
+                    res = self.app['manager'].getSreamsStatus()
+                    if res:
+                        try:
+                            for client in self.app['websocketscmd']:
+                                await client.send_json(res)
+                        except:
+                            print("Unexpected error:", sys.exc_info()[0])
             else:
                 print("len=0")
-            await asyncio.sleep(60)
+            await asyncio.sleep(10)
 
     async def start_background_tasks(self, app):
         app['dispatch'] = asyncio.create_task(self.background_process())

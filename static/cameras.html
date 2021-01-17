@@ -42,7 +42,17 @@
             console.log("stopDisplayStream");
             name = $('#result_image_stream_name').attr("name");
             wsCmd.send(JSON.stringify({ "cmd": "stopGetStream", "stream_id": name }));
+        }
+
+        function updateViewOk(jsonData) {
+            console.log("updateViewOk(jsonData)", jsonData);
+            if (jsonData["OK"][0] == "stopStream") {
+                console.log("updateViewOk(jsonData) 2", jsonData[1]);
+                $("#row_run_" + name).first().html('<a href="#" >Run</a>').bind("click", function (event) { runCamera(this); return false; }); // .bind("click", event);
+
             }
+        }
+
         function showFrame(frame) {
             frame_img = URL.createObjectURL(frame);
             //(frame).arrayBuffer().then(value => {
@@ -71,11 +81,32 @@
             }
         }
 
+        function stopStream(id) {
+            name = id.substring(11);
+            console.log("stopCamera", name, id, $("#" + id).first().text());
+            if ($("#" + id).first().text() == "Stop") {
+                // let id = e.parentElement.parentElement.id.slice(4);
+                $("#" + id).first().text("Stopping").unbind("click");
+                $("#queue_show_" + name).first().text("Stopping").unbind("click");
+                $("#row_run_" + name).first().text("Stopping").unbind("click"); // .bind("click", event);
+                wsCmd.send(JSON.stringify({ "cmd": "stopStream", "stream_id": name }));
+
+            } else {
+                console.log("stopCamera 2", name, $("#" + id).first().text());
+
+            }
+
+        }
         function runCamera(e) {
-            console.log("runCamera", e.parentElement.parentElement.id.slice(4), e);
-            let id = e.parentElement.parentElement.id.slice(4);
-            e.innerHTML = "Running";
-            wsCmd.send(JSON.stringify({ "cmd": "startStream", "stream_id": id }));
+            if (e.innerHTML == "Run") {
+                let id = e.parentElement.parentElement.id.slice(4);
+                console.log("runCamera", e.parentElement.parentElement.id.slice(4), e.innerHTML, $("#row_run_" + id).first().val());
+                //e.innerHTML = "Running";
+                $("#row_run_" + id).first().text("Running").unbind("click"); // bind("click", event);
+                 wsCmd.send(JSON.stringify({ "cmd": "startStream", "stream_id": id }));
+            } else {
+                alert("Please wait! Stream is strating!");
+            }
         }
         //function saveCamera() {
         //    showCamList();
@@ -190,6 +221,7 @@
         function addRowRunning(i, data) {
             name = data['id']
             console.log("add running row", i, data['id']);
+            $("#row_run_" + name).first().text("Rinning");// bind("click", event);
             let count = $('#runningStreams').find('tbody').children().length;
             //    <th scope="col">#</th>
             //    <th scope="col">Name</th>
@@ -218,6 +250,7 @@
                     .append($('<td>').append(data['proceed_frames_cnt']).attr('id', "queue_proceed_frames_cnt_" + name))
                     .append($('<td>').append(data['skip_frames']).attr('id', "queue_skip_frames_" + name))
                     .append($('<td>').append(data['totalFrames']).attr('id', "queue_totalFrames_" + name))
+                    .append($('<td>').append('<a href="#" onclick="stopStream(this.parentElement.id);" >Stop</a>').attr('id', "queue_stop_" + name))
                     .append($('<td>').append('<a href="#" onclick="showStream(this.parentElement.id);" >Show</a>').attr('id', "queue_show_" + name))
 
                 );
@@ -238,9 +271,9 @@
                     .append($('<td>').append(data['name']))
                     .append($('<td>').append(data['url']))
                     .append($('<td>').append(path))
-                    .append($('<td>').append(data['display_video_flag']))
+                    .append($('<td>').append(data['save_video_flag']))
                     .append($('<td>').append(Object.keys(data['borders']).length))
-                    .append($('<td>').append('<a href="#" onclick="runCamera(this); return false;">Run</a>'))
+                    .append($('<td>').append('<a href="#" onclick="runCamera(this); return false;">Run</a>').attr('id', "row_run_" + name))
                     .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); confCamera(); return false;">Change</a>'))
                     .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); delCameraDlg(); return false;">Delete</a>'))
                 );
@@ -249,27 +282,27 @@
         let divTable = document.createElement('div');
         divTable.id = 'camerasTableDiv';
         divTable.innerHTML = `<table id="camerasTable" class="table table-striped table-hover table-sm table-bordered">
-                                            <thead class="thead-dark">
-                                            <tr>
-                                            <th scope="col">#</th>
-                                            <th scope="col">ID</th>
-                                            <th scope="col">Name</th>
-                                            <th scope="col">URL</th>
-                                            <th scope="col">SaveToFile</th>
-                                            <th scope="col">Display</th>
-                                            <th scope="col">Borders</th>
-                                            <th scope="col">Run|Stop</th>
-                                            <th scope="col">Edit</th>
-                                            <th scope="col">Delete</th>
-                                            </tr>
-                                            </thead>
-                                            <tbody id='camerasTableBody'></tbody>
-                                            </table>
-                                            <div class="btn-group" role="group" aria-label="">
-                                                <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCamera(); return false;">New camera</button>
-                                                <button type="button" class="btn btn-secondary"  onclick="curCamId = null; confCameraFile(); return false;">New local file</button>
-                                            </div>
-                                            `;
+                                                                <thead class="thead-dark">
+                                                                <tr>
+                                                                <th scope="col">#</th>
+                                                                <th scope="col">ID</th>
+                                                                <th scope="col">Name</th>
+                                                                <th scope="col">URL</th>
+                                                                <th scope="col">SaveToFile</th>
+                                                                <th scope="col">Display</th>
+                                                                <th scope="col">Borders</th>
+                                                                <th scope="col">Status</th>
+                                                                <th scope="col">Edit</th>
+                                                                <th scope="col">Delete</th>
+                                                                </tr>
+                                                                </thead>
+                                                                <tbody id='camerasTableBody'></tbody>
+                                                                </table>
+                                                                <div class="btn-group" role="group" aria-label="">
+                                                                    <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCamera(); return false;">New camera</button>
+                                                                    <button type="button" class="btn btn-secondary"  onclick="curCamId = null; confCameraFile(); return false;">New local file</button>
+                                                                </div>
+                                                                `;
         //function getCamerasList() {
         //    if (wsCmd != null) {
         //        if (wsCmd.readyState == 1) {
@@ -357,10 +390,10 @@
                             <th scope="col">#</th>
                             <th scope="col">Name</th>
                             <th scope="col">Started</th>
-                            <th scope="col">Done (frames)</th>
-                            <th scope="col">Device</th>
-                            <th scope="col">Finished in (min)</th>
-                            <th scope="col">File(size)</th>
+                            <th scope="col">Done(frames)</th>
+                            <th scope="col">Proceed(frames)</th>
+                            <th scope="col">Skip frames</th>
+                            <th scope="col">Total(frames)</th>
                             <th scope="col">Stop</th>
                             <th scope="col">Display</th>
                         </tr>

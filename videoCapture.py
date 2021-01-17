@@ -104,7 +104,7 @@ class VideoCapture:
     #            except:
     #                print("VideoStream ws_send_data client error")
     #                print(sys.exc_info())
-    #                await client.send_json({'error':["VideoStream","can not send data"]})
+    #                await client.send_json({"error":["VideoStream","can not send data"]})
     #    except:
     #        print("VideoStream ws_send_data error in except")
     #        print(sys.exc_info())
@@ -138,9 +138,9 @@ class VideoCapture:
                 await client.send_json({'OK':["startGetStream", self.id]})
             except:
                 print("VideoCapture exception in startGet Stream")
-                await client.send_json({'error':["startGetStream", self.id, "exception on VideoCapture"]})
+                await client.send_json({"error":["startGetStream", self.id, "exception on VideoCapture"]})
         else:
-            await client.send_json({'OK':["startGetStream", self.id, "one more times"]})            
+            await client.send_json({"error":["startGetStream", self.id, "one more times"]})            
 
     def send_cur_frame(self):
         return self.outFrame   
