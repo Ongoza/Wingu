@@ -14,7 +14,7 @@ path_root = os.path.dirname(os.path.abspath(__file__))
 
 HEIGHT, WIDTH = (416, 416)
 
-gpus = tf.config.experimental.list_physical_devices('GPU')
+devices = tf.config.experimental.list_physical_devices()
 #if gpus:
 #    # Restrict TensorFlow to only use the first GPU
 #    try:
@@ -22,7 +22,7 @@ gpus = tf.config.experimental.list_physical_devices('GPU')
 #    except RuntimeError as e:
 #        # Visible devices must be set at program startup
 #        print(e)
-with tf.device('/device:GPU:1'):
+with tf.device('/GPU:1'):
     image1 = tf.io.read_file(path_root + "/video/cars.jpg")
     image1 = tf.image.decode_image(image1)
     print("img", type(image1))
@@ -34,20 +34,35 @@ with tf.device('/device:GPU:1'):
     print("gpus:", gpus)
     if not gpus:
         print("\n\n!!!!!======= any GPUs don't use ========!!!!!!!!!!!!!!!!!!\n\n")
-    images = tf.expand_dims(image, axis=0) / 255.0
-    print('images.shape=', images.shape)
-    model = YOLOv4(
-        input_shape=(HEIGHT, WIDTH, 3),
-        anchors=YOLOV4_ANCHORS,
-        num_classes=80,
-        training=False,
-        yolo_max_boxes=100,
-        yolo_iou_threshold=0.5,
-        yolo_score_threshold=0.5,
-    )
+        images = tf.expand_dims(image, axis=0) / 255.0
+        print('images.shape=', images.shape)
+        model = YOLOv4(
+            input_shape=(HEIGHT, WIDTH, 3),
+            anchors=YOLOV4_ANCHORS,
+            num_classes=80,
+            training=False,
+            yolo_max_boxes=100,
+            yolo_iou_threshold=0.5,
+            yolo_score_threshold=0.5,
+        )
 
-    model.load_weights(path_root+"/models/yolov4.h5")
-    #model.summary()
+        model.load_weights(path_root+"/models/yolov4.h5")
+        #model.summary()
+    else:
+        with tf.device(device):
+            images = tf.expand_dims(image, axis=0) / 255.0
+            print('images.shape=', images.shape)
+            model = YOLOv4(
+                input_shape=(HEIGHT, WIDTH, 3),
+                anchors=YOLOV4_ANCHORS,
+                num_classes=80,
+                training=False,
+                yolo_max_boxes=100,
+                yolo_iou_threshold=0.5,
+                yolo_score_threshold=0.5,
+            )
+
+            model.load_weights(path_root+"/models/yolov4.h5")
 
     boxes, scores, classes, valid_detections = model.predict(images)
     print("!!!!===================================")

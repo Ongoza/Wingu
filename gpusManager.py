@@ -49,25 +49,27 @@ class Manager(threading.Thread):
                     nvidia_smi.nvmlInit()
                     if len(gpus) >= len(self.config['gpus_configs_list']):
                         for index, key in enumerate(self.config['gpus_configs_list']):
+                            name = "/GPU:" + str(index)
                             key = str(key)
-                            self.gpusList[gpus[key].name] = index
+                            self.gpusList[name] = index
                             cfg = self.loadConfig(['gpus_configs_list'][key], "Gpu_")
                             if cfg != None:
-                                cfg['device_id'] = index
+                                cfg['device_id'] = name
                                 cfg['fileName'] = key
                                 self.gpusConfigList['Gpu_'+index] = cfg
                                 if key in self.config['autostart_gpus_list']:
-                                    self.startGpu(self.config['gpus_configs_list'][key])
+                                    self.startGpu(self.config['gpus_configs_list'][key], name)
                                     time.sleep(3)                        
                 else:
-                    self.gpusList["CPU"] = 0  # Init for CPU
+                    name = "/CPU:0"
+                    self.gpusList[name] = 0  # Init for CPU
                     cfg = self.loadConfig(self.config['cpu_config'], "GPU_")
                     if cfg != None:
-                        cfg['device_id'] = 0
+                        cfg['device_id'] = name
                         cfg['fileName'] = self.config['cpu_config']
                         self.gpusConfigList['cpu'] = cfg
                         if self.config['autostart_gpus_list'] != None:
-                            self.startGpu(cfg)
+                            self.startGpu(cfg, name)
                 self.log.debug("GPUsmanager Active GPUs list: "+" ".join(self.gpusActiveList.keys()))
                 for stream in self.config['streams']:
                     stream = str (stream)
@@ -272,7 +274,7 @@ class Manager(threading.Thread):
         # res["Disk %"] = psutil
         #await save_statistic("stats", 0, res)
 
-    def startGpu(self, configFile, device="CPU"):
+    def startGpu(self, configFile, device="/CPU:0"):
         # id 0 - CPU, 1 - the first GPU,  etc 
         self.log.debug("GPUsmanager start gpu: "+ str(device) + " ".join(self.getActiveGpusList()))
         if device in self.gpusActiveList:

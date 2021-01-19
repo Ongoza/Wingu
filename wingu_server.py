@@ -112,7 +112,7 @@ async def saveConfig(ws, config):
     fileName = os.path.join('config', config['tp'] + str(config['name'])+'.yaml')
     try:
         if os.path.isfile(fileName):
-            log.info("Create backup for config " + fileName)
+            print("Create backup for config " + fileName)
             # !!!!!!!!!!!!!!!!!!!!!!!!
         with open(fileName, 'w', encoding='utf-8') as f:    
             yaml.dump(config['data'], f)

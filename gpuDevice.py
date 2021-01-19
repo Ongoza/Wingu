@@ -29,28 +29,16 @@ class GpuDevice(threading.Thread):
         self.device = str(device_name)
         try:
             self.config = configFile        
-            if device_name == "CPU":
+            with tf.device(self.device):
                 self.detector = YOLOv4(
                     input_shape=(self.config["img_size"], self.config["img_size"], 3), 
                     anchors=YOLOV4_ANCHORS, 
                     num_classes=80, 
                     training=False, 
-                    yolo_max_boxes=self.config["yolo_max_boxes"],
-                    # This means that all predicted that have a detection probability less than VALUE will be removed.
+                    yolo_max_boxes=self.config["yolo_max_boxes"], 
                     yolo_iou_threshold=self.config["yolo_iou_threshold"], 
                     yolo_score_threshold=self.config["yolo_score_threshold"]) 
                 self.detector.load_weights(os.path.join('models', self.config['detector_filename']))
-            else:
-                with tf.device(self.device):
-                    self.detector = YOLOv4(
-                        input_shape=(self.config["img_size"], self.config["img_size"], 3), 
-                        anchors=YOLOV4_ANCHORS, 
-                        num_classes=80, 
-                        training=False, 
-                        yolo_max_boxes=self.config["yolo_max_boxes"], 
-                        yolo_iou_threshold=self.config["yolo_iou_threshold"], 
-                        yolo_score_threshold=self.config["yolo_score_threshold"]) 
-                    self.detector.load_weights(os.path.join('models', self.config['detector_filename']))
             print("GPU config", self.config)
             self.cnt = 0
             self.frame = []
@@ -58,11 +46,11 @@ class GpuDevice(threading.Thread):
             self._stopevent = threading.Event()
             self.ready = True
             # self.isRunning = False
-            self.log.debug(device_name +" with name "+ str(self.id)+ " created ok id:"+ str(self.id))
+            self.log.debug(device_name +" with name "+ str(self.id)+ " created ok id:"+ str(self.device))
             threading.Thread.__init__(self)
             self.start()
         except:
-            print("Can not start GPU for " + str(self.id) + " ", self.config)            
+            print("Can not start GPU for " + str(self.id) + " ", self.device, self.config)            
             # traceback.print_exception(*sys.exc_info()) 
             print(sys.exc_info())
             self.kill()
