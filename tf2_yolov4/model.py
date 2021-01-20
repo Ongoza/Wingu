@@ -7,7 +7,7 @@ from tf2_yolov4.anchors import compute_normalized_anchors
 from tf2_yolov4.backbones.csp_darknet53 import csp_darknet53
 from tf2_yolov4.heads.yolov3_head import yolov3_head
 from tf2_yolov4.necks.yolov4_neck import yolov4_neck
-from tf2_yolov4.tools.weights import get_weights_by_keyword_or_path
+# from tf2_yolov4.tools.weights import get_weights_by_keyword_or_path
 
 
 def YOLOv4(
@@ -75,8 +75,8 @@ def YOLOv4(
 
     yolov4 = tf.keras.Model(inputs=inputs, outputs=upper_features, name="YOLOv4")
 
-    weights_path = get_weights_by_keyword_or_path(weights, model=yolov4)
-    if weights_path is not None:
-        yolov4.load_weights(str(weights_path), by_name=True, skip_mismatch=True)
+    #weights_path = get_weights_by_keyword_or_path(weights, model=yolov4)
+    #if weights_path is not None:
+        #yolov4.load_weights(str(weights_path), by_name=True, skip_mismatch=True)
 
     return yolov4

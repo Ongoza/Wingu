@@ -127,7 +127,8 @@ async def saveConfig(ws, config):
 class Server:
     def __init__(self):
         init_db()
-        self.managerConfigFile = "default" 
+        self.managerConfigFile = "default"
+        self.stop = 5
         self.log = logging.getLogger('app')
         self.log.setLevel(logging.DEBUG)
         f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
@@ -392,7 +393,12 @@ class Server:
                             print("Unexpected error:", sys.exc_info()[0])
             else:
                 print("len=0")
-            await asyncio.sleep(10)
+            await asyncio.sleep(3)
+            # if(self.stop):
+            #     await asyncio.sleep(3)
+            #     self.stop -= 1
+            # else:
+            #     self.kill()
 
     async def start_background_tasks(self, app):
         app['dispatch'] = asyncio.create_task(self.background_process())
@@ -437,5 +443,7 @@ class Server:
 
 
 if __name__ == "__main__":
-
-    server = Server()
+    try:
+        server = Server()
+    except:
+        print("stop bu exception")

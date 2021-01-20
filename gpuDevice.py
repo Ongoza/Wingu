@@ -21,6 +21,8 @@ import videoCapture
 
 class GpuDevice(threading.Thread):
     def __init__(self, id, device_name, configFile, log):
+        print("GpuDevice start init")
+        threading.Thread.__init__(self)
         self.ready = False
         self.id = id
         self.log = log
@@ -28,7 +30,8 @@ class GpuDevice(threading.Thread):
         self.proceedTime = 0
         self.device = str(device_name)
         try:
-            self.config = configFile        
+            self.config = configFile 
+            print("GpuDevice start init model")
             with tf.device(self.device):
                 self.detector = YOLOv4(
                     input_shape=(self.config["img_size"], self.config["img_size"], 3), 
@@ -37,9 +40,11 @@ class GpuDevice(threading.Thread):
                     training=False, 
                     yolo_max_boxes=self.config["yolo_max_boxes"], 
                     yolo_iou_threshold=self.config["yolo_iou_threshold"], 
-                    yolo_score_threshold=self.config["yolo_score_threshold"]) 
+                    yolo_score_threshold=self.config["yolo_score_threshold"])
+                print("GpuDevice model loaded!")
                 self.detector.load_weights(os.path.join('models', self.config['detector_filename']))
-            print("GPU config", self.config)
+                print("GpuDevice weights loaded!")
+            print("GpuDevice init GPU config", self.config)
             self.cnt = 0
             self.frame = []
             self.img_size = self.config['img_size']
@@ -47,10 +52,9 @@ class GpuDevice(threading.Thread):
             self.ready = True
             # self.isRunning = False
             self.log.debug(device_name +" with name "+ str(self.id)+ " created ok id:"+ str(self.device))
-            threading.Thread.__init__(self)
             self.start()
         except:
-            print("Can not start GPU for " + str(self.id) + " ", self.device, self.config)            
+            print("GpuDevice init Can not start GPU for " + str(self.id) + " ", self.device, self.config)            
             # traceback.print_exception(*sys.exc_info()) 
             print(sys.exc_info())
             self.kill()

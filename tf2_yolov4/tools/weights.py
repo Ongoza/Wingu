@@ -2,7 +2,7 @@
 Module related to download of original Darknet weights (Keras-style)
 """
 from pathlib import Path
-
+import os
 import numpy as np
 
 from tf2_yolov4.tools.download import download_file_from_google_drive
