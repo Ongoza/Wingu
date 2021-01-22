@@ -11,6 +11,7 @@ import cv2
 import asyncio
 import aiosqlite
 from requests_futures import sessions
+import tensorflow as tf
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 from deep_sort import nn_matching
@@ -20,10 +21,11 @@ from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 
 class VideoCapture:
-    def __init__(self, camConfig, gpuConfig, device_id, cam_id, log, client=None):        
+    def __init__(self, camConfig, gpuConfig, device_id, cam_id, log, client=None, vc_device="/CPU:0"):
         self.log = log      
-        self.log.debug("start init stream object " + str(cam_id))            
+        self.log.debug("VideoCapture start init stream object " + str(cam_id))
         self.totalFrames = 0
+        self.vc_device = vc_device
         self.server_URL = "http://localhost:8080/update"
         self.startTime = int(time.time())
         self.cur_frame_cnt = 0
@@ -44,7 +46,7 @@ class VideoCapture:
                 7), np.uint8(device_id))
         try:
             self.config = camConfig
-            # print("stream config", self.config)
+            print("VideoCapture stream config", self.config)
             self.url = self.config['url']
             self.isFromFile = self.config['isFromFile']
             self.cap = cv2.VideoCapture(self.url)
@@ -67,19 +69,27 @@ class VideoCapture:
                 outFile = self.config['save_path']
                 self.log.debug("Save out video to file " + outFile)
                 self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
-            self.encoder = gdet.create_box_encoder(os.path.join('models',self.config['encoder_filename']), batch_size=self.batch_size)
-            self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", self.config['max_cosine_distance'], None))
-            # self.cnt_people_in = {}
-            if not self.isFromFile:
-                self.q = queue.Queue()
-                t = threading.Thread(target=self._reader)
-                t.daemon = True
-                t.start()
+            print("VideoCapture stream start load encoder")
+            with tf.device(self.vc_device):
+                self.encoder = gdet.create_box_encoder(os.path.join('models',self.config['encoder_filename']), batch_size=self.batch_size)
+            print("VideoCapture stream start load tracker")
+            if self.encoder is not None:
+                self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", self.config['max_cosine_distance'], None))
+                print("VideoCapture stream tracker ok")
+                # self.cnt_people_in = {}
+                if not self.isFromFile:
+                    self.q = queue.Queue()
+                    t = threading.Thread(target=self._reader)
+                    t.daemon = True
+                    t.start()
+                else:
+                    self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
+                self._stopevent = threading.Event()
+                if client is not None:
+                    client.send_json({'OK':["startStream", self.id]})
             else:
-                self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
-            self._stopevent = threading.Event()
-            if client is not None:
-                client.send_json({'OK':["startStream", self.id]})
+                print("VideoCapture encoder is None")
+                return None
         except:
             self.log.debug("VideoStream Can not start Video Stream for " + camConfig)            
             print("VideoStream err types",type(traceback.print_exception(*sys.exc_info())), type(sys.exc_info())) 
@@ -248,7 +258,8 @@ class VideoCapture:
                      confs.append(score[i])
             if(len(boxs)):
                 #self.log.debug("track boxs "+ str(len(boxs)))
-                features = self.encoder(frame, boxs)
+                with tf.device(self.vc_device):
+                    features = self.encoder(frame, boxs)
                 detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
                 self.tracker.predict()
                 self.tracker.update(detections)
@@ -313,6 +324,7 @@ class VideoCapture:
                 ret2, frame_jpg = cv2.imencode(".jpg", frame)
                 if(ret2):
                     self.outFrame = np.copy(frame_jpg)
+                    print("self.outFrame=", len(self.outFrame))
                     # self.outFrame = iWeb.tobytes()
                     #with open("video/dd__00_1.jpg",'wb') as f:
                     #    f.write(res)

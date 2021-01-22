@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import tensorflow as tf
 
+
 def _run_in_batches(f, data_dict, out, batch_size):
     data_len = len(out)
     num_batches = int(data_len / batch_size)
@@ -40,53 +41,58 @@ def extract_image_patch(image, bbox, patch_shape):
         boundaries.
 
     """
-    #bbox = np.array(bbox)
+    # bbox = np.array(bbox)
     # eee = 0
-    #rrr = 1
-    #if patch_shape is not None:
-        # correct aspect ratio to patch shape
-        #target_aspect = float(patch_shape[1]) / patch_shape[0]
-        #new_width = target_aspect * bbox[3]
-        #bbox[0] -= (new_width - bbox[2]) / 2
-        #bbox[2] = new_width
+    # rrr = 1
+    # if patch_shape is not None:
+    # correct aspect ratio to patch shape
+    # target_aspect = float(patch_shape[1]) / patch_shape[0]
+    # new_width = target_aspect * bbox[3]
+    # bbox[0] -= (new_width - bbox[2]) / 2
+    # bbox[2] = new_width
 
     # convert to top left, bottom right
     # bbox[2:] += bbox[:2]
     bbox = bbox.astype(np.int)
 
     # clip at image boundaries
-    #bbox[:2] = np.maximum(0, bbox[:2])
-    #bbox[2:] = np.minimum(np.asarray(image.shape[:2][::-1]) - 1, bbox[2:])
+    # bbox[:2] = np.maximum(0, bbox[:2])
+    # bbox[2:] = np.minimum(np.asarray(image.shape[:2][::-1]) - 1, bbox[2:])
     if np.any(bbox[:2] >= bbox[2:]):
         print("errr!!!!!! encode img size")
         return None
     image = image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
-    image = cv2.resize(image, (64,128))
+    image = cv2.resize(image, (64, 128))
     # image = cv2.resize(image, tuple(patch_shape[::-1]))
     # print("det",  tuple(patch_shape[::-1]))
     # cv2.imwrite("video/det.jpg", image)
     # eee += 1
-    
+
     return image
 
 
-class ImageEncoder(object):    
+class ImageEncoder(object, device="/CPU:0"):
     def __init__(self, checkpoint_filename, input_name="images", output_name="features"):
         self.d_graph = tf.Graph()
-        with self.d_graph.as_default():
-            self.session = tf.compat.v1.Session()
-            graph_def = tf.compat.v1.GraphDef()
-            with tf.io.gfile.GFile(checkpoint_filename, "rb") as file_handle:
-                graph_def.ParseFromString(file_handle.read())
-            tf.import_graph_def(graph_def, name="net")
-        self.input_var = self.d_graph.get_tensor_by_name("net/%s:0" % input_name)
-        self.output_var = self.d_graph.get_tensor_by_name("net/%s:0" % output_name)
+        self.device =  device
+        # with tf.device("/CPU:0"):
+        #config =  tf.compat.v1.ConfigProto(device_count={"GPU": 0})
+        config = tf.compat.v1.ConfigProto()
+        with tf.device(self.device):
+            with self.d_graph.as_default():
+                self.session = tf.compat.v1.Session(config=config)
+                graph_def = tf.compat.v1.GraphDef()
+                with tf.io.gfile.GFile(checkpoint_filename, "rb") as file_handle:
+                    graph_def.ParseFromString(file_handle.read())
+                tf.import_graph_def(graph_def, name="net")
+            self.input_var = self.d_graph.get_tensor_by_name("net/%s:0" % input_name)
+            self.output_var = self.d_graph.get_tensor_by_name("net/%s:0" % output_name)
 
-        assert len(self.output_var.get_shape()) == 2
-        assert len(self.input_var.get_shape()) == 4
-        self.feature_dim = self.output_var.get_shape().as_list()[-1]
-        self.image_shape = self.input_var.get_shape().as_list()[1:]
-        #model.save(output_weights_path)
+            assert len(self.output_var.get_shape()) == 2
+            assert len(self.input_var.get_shape()) == 4
+            self.feature_dim = self.output_var.get_shape().as_list()[-1]
+            self.image_shape = self.input_var.get_shape().as_list()[1:]
+        # model.save(output_weights_path)
 
     def __call__(self, data_x, batch_size=16):
         # print("call", data_x.shape)
@@ -95,10 +101,12 @@ class ImageEncoder(object):
         # data_xx = tf.constant(data_x)
         # data_xx = data_x.eval()
         # data_xx = self.session.run(data_x)
-        _run_in_batches(
-            lambda x: self.session.run(self.output_var, feed_dict=x),
-                        {self.input_var: data_x}, out, batch_size)
-        
+        with tf.device('/CPU:0'):
+
+            _run_in_batches(
+                lambda x: self.session.run(self.output_var, feed_dict=x),
+                {self.input_var: data_x}, out, batch_size)
+
         return out
 
 
@@ -200,11 +208,11 @@ def parse_args():
         required=True)
     parser.add_argument(
         "--detection_dir", help="Path to custom detections. Defaults to "
-        "standard MOT detections Directory structure should be the default "
-        "MOTChallenge structure: [sequence]/det/det.txt", default=None)
+                                "standard MOT detections Directory structure should be the default "
+                                "MOTChallenge structure: [sequence]/det/det.txt", default=None)
     parser.add_argument(
         "--output_dir", help="Output directory. Will be created if it does not"
-        " exist.", default="detections")
+                             " exist.", default="detections")
     return parser.parse_args()
 
 

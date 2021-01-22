@@ -8,14 +8,14 @@ import numpy as np
 import tensorflow as tf
 import yaml
 import cv2
-import nvidia_smi
+# import nvidia_smi
 #import psutil
 import aiosqlite
 
 import gpuDevice
 
 #from wingu_server import ws_send_data
-
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 class Manager(threading.Thread):
     def __init__(self, configFileName):
@@ -45,21 +45,28 @@ class Manager(threading.Thread):
                 print("gpus manager config", self.config)
                 gpus = tf.config.experimental.list_physical_devices('GPU')
                 if gpus:
+                    print("gpus", gpus)
+                    print("len=", len(self.config['gpus_configs_list']), len(gpus))
                     self.isGPU = True
-                    nvidia_smi.nvmlInit()
-                    if len(gpus) >= len(self.config['gpus_configs_list']):
-                        for index, key in enumerate(self.config['gpus_configs_list']):
+                    #nvidia_smi.nvmlInit()
+                    if len(gpus) <= len(self.config['gpus_configs_list']):
+                        print("gpus_configs_list, gpus config is ok", self.config['gpus_configs_list'])
+                        for index, gpu_id in enumerate(gpus):
+                            print("key", index, gpu_id)
                             name = "/GPU:" + str(index)
-                            key = str(key)
+                            device = str(self.config['gpus_configs_list'][index])
+                            print("gpus name", name, device)
                             self.gpusList[name] = index
-                            cfg = self.loadConfig(['gpus_configs_list'][key], "Gpu_")
-                            if cfg != None:
+                            print("gpus 333", self.config['gpus_configs_list'][index])
+                            cfg = self.loadConfig(self.config['gpus_configs_list'][index], "Gpu_")
+                            print("gpus cfg", cfg)
+                            if cfg is not None:
                                 cfg['device_id'] = name
-                                cfg['fileName'] = key
-                                self.gpusConfigList['Gpu_'+index] = cfg
-                                if key in self.config['autostart_gpus_list']:
-                                    self.startGpu(self.config['gpus_configs_list'][key], name)
-                                    time.sleep(3)                        
+                                cfg['fileName'] = device
+                                self.gpusConfigList[name] = cfg
+                                if device in self.config['autostart_gpus_list']:
+                                    self.startGpu(cfg, name)
+                                    time.sleep(3)
                 else:
                     name = "/CPU:0"
                     self.gpusList[name] = 0  # Init for CPU

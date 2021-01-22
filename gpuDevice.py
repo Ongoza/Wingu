@@ -10,7 +10,7 @@ import numpy as np
 import cv2
 import tensorflow as tf
 import asyncio
-#os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 
 from tf2_yolov4.anchors import YOLOV4_ANCHORS
 from tf2_yolov4.model import YOLOv4
@@ -70,27 +70,30 @@ class GpuDevice(threading.Thread):
 
     def startCam(self, camConfig, cam_id, iter, client=None):
         try:
+            print("GpuDevice iter", iter)
             if iter < 100:
-                # print('try to start video: ', camConfig, iter)
+                print('GpuDevice try to start video: ', camConfig, cam_id)
                 iter += 1
-                #id, url, borders, skipFrames, max_cosine_distance, nn_budget
                 if self.ready:
                     #if(len(self.cams) == 1 ):
                     #    self.start()
                     #    time.sleep(3)
-                    cam =  videoCapture.VideoCapture(camConfig, self.config, self.id, cam_id, self.log, client)
-                    if cam.id:
+                    print("GpuDevice Try start videoCapture obj")
+                    cam = videoCapture.VideoCapture(camConfig, self.config, self.id, cam_id, self.log, client)
+                    if cam is not None:
                         self.cams[cam_id] = cam
                         self.log.debug("GpuDevice "+str(self.device)+" Current num of cameras:" + str(len(self.cams)))
                     else:
                        self.log.info("GpuDevice "+str(self.id)+" can not start Stream")
                 else:                
                     time.sleep(1)
+                    print("try one more time")
                     self.startCam(camConfig, cam_id, iter, client)
             else:
-                self.log.info("GpuDevice "+str(self.id)+" is not ready for start too long time!!")
+                self.log.info("GpuDevice "+str(self.id)+" is not ready for start too long time!! cam="+str(cam_id))
         except:
-            self.log.debug("GpuDevice "+str(self.id)+" exception on stream start")
+            print(sys.exc_info())
+            self.log.debug("GpuDevice "+str(self.id)+" exception on stream start cam="+str(cam_id))
 
     def stopCam(self, id):
         self.log.debug("GpuDevice "+str(self.id)+'stop video: '+str(id))
@@ -144,7 +147,8 @@ class GpuDevice(threading.Thread):
                     # convert numpy opencv to tensor
                     frames_tf = tf.convert_to_tensor(frames, dtype=tf.float32, dtype_hint=None, name=None) / 255.0
                     # print("frames_tf type=", type(frames_tf))
-                    boxes, scores, classes, valid_detections = self.detector.predict(frames_tf)            
+                    with tf.device(self.device):
+                        boxes, scores, classes, valid_detections = self.detector.predict(frames_tf)
                     self.proceedTime = time.time() - start
                     for j in range(len(frames)):
                        await cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
