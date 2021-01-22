@@ -71,7 +71,7 @@ class VideoCapture:
                 self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
             print("VideoCapture stream start load encoder")
             with tf.device(self.vc_device):
-                self.encoder = gdet.create_box_encoder(os.path.join('models',self.config['encoder_filename']), batch_size=self.batch_size)
+                self.encoder = gdet.create_box_encoder(os.path.join('models',self.config['encoder_filename']), batch_size=self.batch_size, device=self.vc_device)
             print("VideoCapture stream start load tracker")
             if self.encoder is not None:
                 self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", self.config['max_cosine_distance'], None))

@@ -71,8 +71,8 @@ def extract_image_patch(image, bbox, patch_shape):
     return image
 
 
-class ImageEncoder(object, device="/CPU:0"):
-    def __init__(self, checkpoint_filename, input_name="images", output_name="features"):
+class ImageEncoder(object):
+    def __init__(self, checkpoint_filename, input_name="images", output_name="features", device="/CPU:0"):
         self.d_graph = tf.Graph()
         self.device =  device
         # with tf.device("/CPU:0"):
@@ -101,8 +101,7 @@ class ImageEncoder(object, device="/CPU:0"):
         # data_xx = tf.constant(data_x)
         # data_xx = data_x.eval()
         # data_xx = self.session.run(data_x)
-        with tf.device('/CPU:0'):
-
+        with tf.device(self.device):
             _run_in_batches(
                 lambda x: self.session.run(self.output_var, feed_dict=x),
                 {self.input_var: data_x}, out, batch_size)
@@ -110,8 +109,8 @@ class ImageEncoder(object, device="/CPU:0"):
         return out
 
 
-def create_box_encoder(model_filename, input_name="images", output_name="features", batch_size=16):
-    image_encoder = ImageEncoder(model_filename, input_name, output_name)
+def create_box_encoder(model_filename, input_name="images", output_name="features", batch_size=16, device="/CPU:0"):
+    image_encoder = ImageEncoder(model_filename, input_name, output_name, device)
     image_shape = image_encoder.image_shape
 
     def encoder(image, boxes):
