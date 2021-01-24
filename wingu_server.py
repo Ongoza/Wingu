@@ -27,6 +27,7 @@ from views.websocket import WebSocket
 import logging
 import yaml
 import time
+import weakref
 
 #import camera
 import gpusManager
@@ -167,8 +168,8 @@ class Server:
         self.app.router.add_static('/static', 'static', name='static', append_version=True)
         # app.router.add_static('/', 'index', name='static')
         # end route part        
-        self.app.on_cleanup.append(self.on_shutdown)
-        self.app['websocketscmd'] = set()
+        self.app.on_shutdown.append(self.on_shutdown)
+        self.app['websocketscmd'] = weakref.WeakSet()
         #  start cameras manager Object
         print("starting GPU manager")
         self.app.on_startup.append(self.start_background_tasks)
@@ -358,16 +359,13 @@ class Server:
             await web.json_response({"error":[fileName,"can not open file"]})
 
     async def on_shutdown(self, app):
-        try:
-            if  'websockets' in self.app:
-                for ws in self.app['websockets']:
+        print("start on_shutdown")
+        if  'websocketscmd' in app:
+            for ws in self.app['websocketscmd']:
+                try:
                     await ws.close(code=1001, message='Server shutdown')
-            if  'websocketscmd' in app:
-                for ws in self.app['websocketscmd']:
-                    await ws.close(code=1001, message='Server shutdown')
-
-        except:
-            print(sys.exc_info())
+                finally:
+                    request.app['websockets'].discard(ws)
 
         #  background task 
 
@@ -379,71 +377,34 @@ class Server:
             try:
                 #await save_statistic("intersetions", "file_0", ["border_a","border_b"])
                 print("server tik")
+                if len(self.app['websocketscmd'])>0:
+                    if 'manager' in self.app:
+                        res = self.app['manager'].getSreamsStatus()
+                        if res:
+                            try:
+                                for client in self.app['websocketscmd']:
+                                    await client.send_json(res)
+                            except:
+                                print("Unexpected error:", sys.exc_info()[0])
+                else:
+                    print("len=0")
             except:
-                print('Errror')
+                print('server loop Errror')
                 print(sys.exc_info())
-            if len(self.app['websocketscmd'])>0:
-                if 'manager' in self.app:
-                    res = self.app['manager'].getSreamsStatus()
-                    if res:
-                        try:
-                            for client in self.app['websocketscmd']:
-                                await client.send_json(res)
-                        except:
-                            print("Unexpected error:", sys.exc_info()[0])
-            else:
-                print("len=0")
-            await asyncio.sleep(3)
-            # if(self.stop):
-            #     await asyncio.sleep(3)
-            #     self.stop -= 1
-            # else:
-            #     self.kill()
+            await asyncio.sleep(1)
 
     async def start_background_tasks(self, app):
         app['dispatch'] = asyncio.create_task(self.background_process())
 
     async def cleanup_background_tasks(self, app):
+        print("start cleanup_background_tasks")
         app['dispatch'].cancel()
-        await app['dispatch']
+        await self.app['dispatch']
       #  end background task 
-
-    # db connect
-    #async def init_db(self, app: web.Application):
-    #    sqlite_db = get_db_path()
-    #    db = await aiosqlite.connect(sqlite_db)
-    #    db.row_factory = aiosqlite.Row
-    #    self.app.db = db
-    #    yield
-    #    await self.app.db.close()
-    # end db connect
-
-    #async def try_make_db(self):
-    #    self.log.debug("DB path: " + str(settings.DB_PATH))
-    #    sqlite_db = get_db_path()
-    #    if sqlite_db.exists():
-    #        self.log.debug("DB exist")
-    #        return
-    #    self.log.debug("creating new DB")
-    #    async with aiosqlite.connect(sqlite_db) as conn:
-    #        # cur = conn.cursor()
-    #        # cur.execute(f'CREATE TABLE {MESSAGE_COLLECTION} (id INTEGER PRIMARY KEY, title TEXT, text TEXT, owner TEXT, editor TEXT, image BLOB)')
-    #        # conn.commit()
-    #        sql_1 = f'CREATE TABLE {settings.USER_COLLECTION} (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT)'
-    #        sql_2 = f'CREATE TABLE {settings.STATS_COLLECTION} (id INTEGER PRIMARY KEY, device TEXT, param TEXT, value TEXT, time Date)'
-    #        sql_3 = f'CREATE TABLE {settings.INTERSECTION_COLLECTION} (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, time Date)'
-    #        print(sql_1)
-    #        #log.debug("sql:"+sql)
-    #        await cur.execute(sql_1)
-    #        # conn.commit()
-    #        await cur.execute(sql_2)
-    #        #conn.commit()
-    #        await cur.execute(sql_3)
-    #        #conn.commit()
-
 
 if __name__ == "__main__":
     try:
         server = Server()
     except:
         print("stop bu exception")
+    print("server stooped Ok")
