@@ -76,8 +76,8 @@ class ImageEncoder(object):
         self.d_graph = tf.Graph()
         self.device =  device
         # with tf.device("/CPU:0"):
-        #config =  tf.compat.v1.ConfigProto(device_count={"GPU": 0})
-        config = tf.compat.v1.ConfigProto()
+        config =  tf.compat.v1.ConfigProto(device_count={"GPU": 0})
+        # config = tf.compat.v1.ConfigProto()
         with tf.device(self.device):
             with self.d_graph.as_default():
                 self.session = tf.compat.v1.Session(config=config)

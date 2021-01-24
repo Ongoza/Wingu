@@ -20,6 +20,37 @@ import deep_sort.generate_detections as gdet
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 
+class VideoCaptureStream:
+
+    def __init__(self, name):
+        self.cap = cv2.VideoCapture(name)
+        self.q = queue.Queue()
+        t = threading.Thread(target=self._reader)
+        t.daemon = True
+        t.start()
+
+    # read frames as soon as they are available, keeping only most recent one
+    def _reader(self):
+        while True:
+            ret, frame = self.cap.read()
+            if not ret:
+                global is_frame
+                is_frame = False
+                break
+            if not self.q.empty():
+                try:
+                    self.q.get_nowait()   # discard previous (unprocessed) frame
+                except queue.Empty:
+                    pass
+            self.q.put(frame)
+
+    def read(self):
+        return self.q.get()
+
+    def kill(self):
+        self.q.get_nowait()
+        self.cap.release()
+
 class VideoCapture:
     def __init__(self, camConfig, gpuConfig, device_id, cam_id, log, client=None, vc_device="/CPU:0"):
         self.log = log      
@@ -79,10 +110,7 @@ class VideoCapture:
                 print("VideoCapture stream tracker ok")
                 # self.cnt_people_in = {}
                 if not self.isFromFile:
-                    self.q = queue.Queue()
-                    t = threading.Thread(target=self._reader)
-                    t.daemon = True
-                    t.start()
+                    self.q = VideoCaptureStream(0)
                 else:
                     self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
                 self._stopevent = threading.Event()
@@ -172,18 +200,6 @@ class VideoCapture:
     # read frames as soon as they are available, keeping only most recent one
     # 0. CV_CAP_PROP_POS_MSEC Current position of the video file in milliseconds.
     # 1. CV_CAP_PROP_POS_FRAMES 0-based index of the frame to be decoded/captured next.
-    def _reader(self):
-        while not self._stopevent.isSet():
-            if(self.cap):
-                ret, frame = self.cap.read()
-                if (ret):
-                    if (not self.q.empty()):
-                        try: self.q.get_nowait()   # discard previous (unprocessed) frame
-                        except queue.Empty: pass
-                    frame = cv2.resize(frame, self.frame_res)
-                    self.q.put(frame)
-                # else: print("skip frame", self.cur_frame)
-                self.cur_frame_cnt += 1
 
     def read(self):
         start = time.time()
@@ -206,7 +222,14 @@ class VideoCapture:
             else:
                 self.kill()
         else:
-            return self.q.get()
+            start = time.time()
+            frame = self.q.read()
+            self.cur_frame_cnt += 1
+            self.proceed_frames_cnt += 1
+            frame = cv2.resize(frame, self.frame_res)
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            self.proceedTime[0] = time.time() - start
+            return frame
 
     def ccw(self,A,B,C):
         return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])

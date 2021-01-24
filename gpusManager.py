@@ -120,6 +120,7 @@ class Manager(threading.Thread):
             try:
                 self.log.debug("GPUsmanager try to autostart "+ stream)
                 await self.startStream(stream)
+                time.sleep(3)
             except:
                 self.log.debug("GPUsmanager exception autostart "+ stream)
 
