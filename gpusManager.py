@@ -116,20 +116,21 @@ class Manager(threading.Thread):
         loop.close()
 
     async def _run(self):
-        for stream in self.config['autotart_streams']:
-            try:
-                self.log.debug("GPUsmanager try to autostart "+ stream)
-                await self.startStream(stream)
-                time.sleep(3)
-            except:
-                self.log.debug("GPUsmanager exception autostart "+ stream)
+        if self.config['autotart_streams'] is not None:
+            for stream in self.config['autotart_streams']:
+                try:
+                    self.log.debug("GPUsmanager try to autostart "+ stream)
+                    await self.startStream(stream)
+                    time.sleep(3)
+                except:
+                    self.log.debug("GPUsmanager exception autostart "+ stream)
 
         while not self._stopevent.isSet():
             try:
-                print("GPUsmanager tik")
+                print("GPUsmanager tik ", len(self.gpusActiveList))
                 # print("data=", type, id, data)
                 #await self.getHardwareStatus()
-                await asyncio.sleep(30)
+                await asyncio.sleep(3)
             except:
                 self.log.debug("GPUsmanager run stoped by exception")
 
@@ -265,7 +266,7 @@ class Manager(threading.Thread):
 
     def getSreamsStatus(self):
         res = self.getCamsStatus()
-        return {"camsList": res}
+        return res
 
     def getConfig(self):
         #np.append(uid, np.uint8(device_id))
@@ -314,15 +315,15 @@ class Manager(threading.Thread):
                 print(sys.exc_info())
             
     def getActiveGpusList(self):
-        print("GPUsmanager getActiveGpusList")
+        # print("GPUsmanager getActiveGpusList")
         #print("GPUsmanager self.streamsConfigList", self.gpusActiveList)
         res = []
-        for gpu_id in self.gpusActiveList.keys():
-            print("GPUsmanager key", gpu_id, self.gpusActiveList[gpu_id])
+        for gpu_id in list(self.gpusActiveList):
+            # print("GPUsmanager key", gpu_id, self.gpusActiveList[gpu_id])
             try:
                 if self.gpusActiveList[gpu_id].device:
                     res.append(gpu_id)
-                    self.log.debug("ok " + gpu_id)
+                    # self.log.debug("GPUsmanager CHECK gpu ok " + gpu_id)
             except:
                 print("GPUsmanager except in getActiveGpusList")
                 print(sys.exc_info())
@@ -384,14 +385,14 @@ class Manager(threading.Thread):
     def kill(self):
         self.log.debug("GPUsmanager try to stop")
         self._stopevent.set()
-        for id in self.gpusActiveList.keys():
+        for id in list(self.gpusActiveList):
             try:
                 self.log.debug("GPUsmanager try stop gpu: "+ str(id))
                 self.gpusActiveList[id].kill()
             except:
                 self.log.debug('GPUsmanager Erorr stop gpu: '+ str(id))
         time.sleep(10)
-        for id in self.gpusActiveList.keys():
+        for id in list(self.gpusActiveList):
             try:
                 ready = self.gpusActiveList[id].id
             except:

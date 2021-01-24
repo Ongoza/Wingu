@@ -80,7 +80,7 @@ class VideoCapture:
             print("VideoCapture stream config", self.config)
             self.url = self.config['url']
             self.isFromFile = self.config['isFromFile']
-            self.cap = cv2.VideoCapture(self.url)
+            self.cap = None
             self.img_size = int(gpuConfig['img_size'])
             # self.lastFrame = 100
             self.max_hum_w = int(self.img_size/4) 
@@ -110,8 +110,9 @@ class VideoCapture:
                 print("VideoCapture stream tracker ok")
                 # self.cnt_people_in = {}
                 if not self.isFromFile:
-                    self.q = VideoCaptureStream(0)
+                    self.q = VideoCaptureStream(self.url)
                 else:
+                    self.cap = cv2.VideoCapture(self.url)
                     self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
                 self._stopevent = threading.Event()
                 #if client is not None:
@@ -185,17 +186,18 @@ class VideoCapture:
         return self.outFrame   
 
     async def save_statistic(self, borders_arr):
-        print("VideoCapture start save stat in stream")
+        # print("VideoCapture start save stat in stream")
         try:
             for borders in borders_arr:
-                for item in borders:
-                    sql = f'INSERT INTO {self.db_table_name}(border, stream_id, time) VALUES("{item}", "{self.id}", {int(time.time())})'
-                    print("sql", sql)
+                for item in borders.keys():
+                    sql = f'INSERT INTO {self.db_table_name}(border, stream_id, in_out, time) VALUES("{item}", "{self.id}", {int(borders[item])}, {int(time.time())})'
+                    # print("sql borders", sql)
                     async with aiosqlite.connect(self.db_path) as db:
                         await db.execute(sql)
                         await db.commit()
         except:
             self.log.debug("VideoCapture Error save data")
+            print(sys.exc_info())
 
     # read frames as soon as they are available, keeping only most recent one
     # 0. CV_CAP_PROP_POS_MSEC Current position of the video file in milliseconds.
@@ -237,7 +239,7 @@ class VideoCapture:
 
     # Return true if line segments AB and CD intersect
     def track_intersection_angle(self,A,B):   
-        res = []
+        res = {}
         for key in self.borders:
             C = np.array(self.borders[key][0])
             D = np.array(self.borders[key][1])
@@ -246,11 +248,13 @@ class VideoCapture:
                 v1 = np.array(D) - np.array(C)
                 angle = np.math.atan2(np.linalg.det([v0,v1]), np.dot(v0,v1))
                 if (angle > 0):
-                    res.append(key)
+                    res[key] = 1
+                else:
+                    res[key] = 0
         return res
 
-    def add_intersectio_event(self, border_names, id):
-        self.log.debug(border_names, id)
+    # def add_intersectio_event(self, border_names, id):
+    #     self.log.debug(border_names, id)
 
     def drawBorderLines(self, frame):
         for b in self.borders:
@@ -298,13 +302,13 @@ class VideoCapture:
                     # self.log.debug("track "+ track_name)
                     if(hasattr(track, 'xy')):
                         lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
-                        if lst_intrsc:
+                        if lst_intrsc.keys():
                             #border_line
                             if(not hasattr(track, 'calculated')):
                                 #cnt_people_in[track.track_id] = 0
                                 track.calculated = "in_"
                                 track.color = (52, 235, 240)
-                                self.log.debug("intersection!! "+ self.id +" "+ str(len(lst_intrsc)))
+                                self.log.debug("intersection!! "+ self.id)
                                 res.append(lst_intrsc)
                                 track.cross_cnt = self.path_track
                         if(hasattr(track, 'calculated')):
@@ -336,7 +340,7 @@ class VideoCapture:
             if res:
                  await self.save_statistic(res)
             if self.clients:
-                self.log.debug("save")
+                # self.log.debug("save")
                 if(not self.save_video_flag):
                     frame = self.drawBorderLines(frame)
                     cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, (255, 255, 0), 1)

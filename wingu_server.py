@@ -61,7 +61,7 @@ def init_db():
         c = conn.cursor()
         c.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
         c.execute('CREATE TABLE stats (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, time INTEGER)')
-        c.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, time INTEGER)')
+        c.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, in_out INTEGER, time INTEGER)')
         #c.execute("INSERT INTO stocks VALUES ('2006-01-05','BUY','RHAT',100,35.14)")
         conn.commit()
         conn.close()
@@ -268,7 +268,7 @@ class Server:
                             await ws.send_json({"error":['getStreamsConfig', msg.data]})                             
                     elif msg_json['cmd'] == 'getManagerData':
                         if True:
-                        # if "manager" in app:
+                            #   if "manager" in app:
                             # data = app["manager"].getConfig()
                             # print("test_manager_config")
                             data = test_manager_config
@@ -345,39 +345,48 @@ class Server:
                     await ws.send_json({"error":["can not parse json", msg.data]})
             elif msg.type == WSMsgType.ERROR:
                 print('ws connection closed with exception %s' % ws.exception())
-        print('websocket connection closed')
+        # print('websocket connection closed')
         if 'manager' in self.app:
             try:
-                await self.app['manager'].stopGetStream(ws, msg_json['stream_id'])
+                await self.app['manager'].stopGetStream(ws, "all")
             except:
-                print("server except stop getstream on clode connection")
+                print("server exceptption on stopGetStream on close connection")
+                print(sys.exc_info())
         request.app['websocketscmd'].remove(ws)
         return ws
 
 
     async def getFileImg(self, request):
         try:
-            print("start getFileImag")
+            print("server getFileImag start==============")
             if ('file' in request.rel_url.query):
                 fileName = request.rel_url.query['file']
                 print("filaName", fileName) #'video/39.avi'            
-                if os.path.isfile(fileName):
-                    vidcap = cv2.VideoCapture(fileName)
-                    img = vidcap.read()[1]
-                    img = cv2.resize(img, (541,416), interpolation = cv2.INTER_AREA)
+                # if os.path.isfile(fileName):
+                vidcap = cv2.VideoCapture(fileName)
+                time.sleep(1)
+                if vidcap.isOpened():
+                    print("server getFileImag ok==============")
+                    ret, img = vidcap.read()
+                    img = cv2.resize(img, (541,416), interpolation=cv2.INTER_AREA)
                     res = cv2.imencode('.JPEG', img)[1].tobytes()
-                    #exif_dict = piexif.load(res.info['exif'])
-                    #print("res", exif_dict)
-                    #return web.Response(text="All right!")
+                    vidcap.release()
                     return web.Response(body=res)
                 else:
-                    print(fileName,"can not find file")
-                    return web.json_response({"error":["can not find file", fileName]})
-            else:
-                return web.json_response({"error":["can not find file name"]})
+                    print("server getFileImag wait more==============")
+                    time.sleep(3)
+                    if vidcap.isOpened():
+                        ret, img = vidcap.read()
+                        img = cv2.resize(img, (541, 416), interpolation=cv2.INTER_AREA)
+                        res = cv2.imencode('.JPEG', img)[1].tobytes()
+                        vidcap.release()
+                        return web.Response(body=res)
+                    else:
+                        print(fileName,"server getFileImag  can not open image=========")
+                        return web.json_response({"error":["server","getFileImg"]})
         except:
             print("can not open file")
-            await web.json_response({"error":[fileName,"can not open file"]})
+            return web.json_response({"error":["server","getFileImg","can not open file"]})
 
     async def on_shutdown(self, app):
         print("start on_shutdown")
@@ -394,22 +403,24 @@ class Server:
     async def background_process(self):
         #await self.try_make_db()
         while True:
-            self.log.debug('Run background task each 1 min')
+            # self.log.debug('Run background task each 1 min')
             # print("len websocketscmd:", str(len(self.app['websocketscmd'])))
             try:
                 #await save_statistic("intersetions", "file_0", ["border_a","border_b"])
-                print("server tik")
-                if len(self.app['websocketscmd'])>0:
-                    if 'manager' in self.app:
-                        res = self.app['manager'].getSreamsStatus()
-                        if res:
-                            try:
-                                for client in self.app['websocketscmd']:
-                                    await client.send_json(res)
-                            except:
-                                print("Unexpected error:", sys.exc_info()[0])
-                else:
-                    print("len=0")
+                # print("server tik")
+                if 'websocketscmd' in self.app:
+                    if self.app['websocketscmd']:
+                        if 'manager' in self.app:
+                            res = self.app['manager'].getSreamsStatus()
+                            #print("res", len(res), res)
+                            if any(res):
+                                #print("res 2")
+                                res = {"camsList": res}
+                                try:
+                                    for ws in self.app['websocketscmd']:
+                                        await ws.send_json(res)
+                                except:
+                                    print("Unexpected error:", sys.exc_info()[0])
             except:
                 print('server loop Errror')
                 print(sys.exc_info())
