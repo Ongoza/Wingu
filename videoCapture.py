@@ -26,7 +26,7 @@ class VideoCapture:
         self.log.debug("VideoCapture start init stream object " + str(cam_id))
         self.totalFrames = 0
         self.vc_device = vc_device
-        self.server_URL = "http://localhost:8080/update"
+        self.server_URL = "http://localhost:8080/update?"
         self.startTime = int(time.time())
         self.cur_frame_cnt = 0
         self.proceed_frames_cnt = 0
@@ -67,6 +67,7 @@ class VideoCapture:
             self.out = None
             if self.save_video_flag:            
                 outFile = self.config['save_path']
+                if outFile == '': outFile =  'video/'+str(self.id)+"_auto.avi"
                 self.log.debug("Save out video to file " + outFile)
                 self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
             print("VideoCapture stream start load encoder")
@@ -85,8 +86,8 @@ class VideoCapture:
                 else:
                     self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
                 self._stopevent = threading.Event()
-                if client is not None:
-                    client.send_json({'OK':["startStream", self.id]})
+                #if client is not None:
+                #    client.send_json({'OK':["startStream", self.id]})
             else:
                 print("VideoCapture encoder is None")
                 return None
@@ -96,9 +97,9 @@ class VideoCapture:
             print("VideoStream err:", sys.exc_info())
             self.id = None
 
-    async def ws_send_data(self):
+    async def ws_send_data(self, cmd):
         try:
-            self.session.get(self.server_URL)
+            await self.session.get(self.server_URL+'cmd='+cmd)
             #future.result()
             #print("ok")
         except:
@@ -309,7 +310,6 @@ class VideoCapture:
                 frame = cv2.resize(frame,self.save_video_res)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 self.out.write(frame)
-            # if self.display_video_flag:
             if res:
                  await self.save_statistic(res)
             if self.clients:
@@ -328,7 +328,7 @@ class VideoCapture:
                     # self.outFrame = iWeb.tobytes()
                     #with open("video/dd__00_1.jpg",'wb') as f:
                     #    f.write(res)
-                    await self.ws_send_data()
+                    await self.ws_send_data("frame")
             self.proceedTime[1] = time.time() - start
         except:
             print(sys.exc_info())
@@ -336,7 +336,8 @@ class VideoCapture:
     def kill(self):
         try:
             self._stopevent.set()
-            self.isRun = False        
+            self.isRun = False 
+            self.session.get(self.server_URL+'cmd=stopStream&name='+self.id)
             if self.save_video_flag: self.out.release()
             if(self.cap):
                 if(self.cap.isOpened()): self.cap.release()

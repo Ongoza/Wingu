@@ -45,10 +45,12 @@
         }
 
         function updateViewOk(jsonData) {
-            console.log("updateViewOk(jsonData)", jsonData);
+            console.log("updateViewOk(jsonData)", "#row_run_" + jsonData["OK"][1], $('#row_run_' + jsonData[1]));
             if (jsonData["OK"][0] == "stopStream") {
                 console.log("updateViewOk(jsonData) 2", jsonData[1]);
-                $("#row_run_" + name).first().html('<a href="#" >Run</a>').bind("click", function (event) { runCamera(this); return false; }); // .bind("click", event);
+                //.append('<a href="#" onclick="runCamera(this); return false;">Run</a>').attr('id', "row_run_" + name))
+                // onclick = "runCamera(this); return false;"
+                $('#row_run_' + jsonData["OK"][1]).first().html('<a href="#" onclick="runCamera(this); return false;" >Run</a>'); // .bind("click", event);
 
             }
         }
@@ -98,15 +100,11 @@
 
         }
         function runCamera(e) {
-            if (e.innerHTML == "Run") {
                 let id = e.parentElement.parentElement.id.slice(4);
-                console.log("runCamera", e.parentElement.parentElement.id.slice(4), e.innerHTML, $("#row_run_" + id).first().val());
+                console.log("runCamera", id);
                 //e.innerHTML = "Running";
                 $("#row_run_" + id).first().text("Running").unbind("click"); // bind("click", event);
                 wsCmd.send(JSON.stringify({ "cmd": "startStream", "stream_id": id }));
-            } else {
-                alert("Please wait! Stream is strating!");
-            }
         }
         //function saveCamera() {
         //    showCamList();
@@ -155,12 +153,13 @@
             }
         }
 
-        function confCameraFile() {
+        function confCameraNew() {
 
             $('#content').empty();
             $('#content').append(divNewCamera);
             if (curCamId == null) {
-                $('#cam_borders').append('<button type="button" class="btn btn-primary" >Create</button>');
+
+                $('#cam_borders').append('<button type="button" class="btn btn-primary">Create</button>');
             } else {
 
             }
@@ -178,14 +177,15 @@
                 } else {
                     // id, url, skip_frames, isFromFile, save_path, save_video_res, save_video_flag
                     // res 320p, 480p, 720p
-                    // console.log("streamsConfigList[curCamId]['borders']", )
-                    $('#addStream_id').val(streamsConfigList[curCamId]['id']);
+                    console.log("streamsConfigList[curCamId]['id']", )
+                    $('#addStream_id').val(curCamId);
                     $('#addStream_name').val(streamsConfigList[curCamId]['name']);
                     $('#addStream_url').val(streamsConfigList[curCamId]['url']);
                     $('#addStream_skip_frames').val(streamsConfigList[curCamId]['skip_frames']);
                     if (streamsConfigList[curCamId]['isFromFile']) {
                         $('#addStream_isFromFile').prop('checked', true);
                     }
+                    console.log()
                     if (streamsConfigList[curCamId]['save_video_flag']) {
                         $('#addStream_save_video_flag').prop('checked', true);
                     }
@@ -261,21 +261,19 @@
         }
 
         function addRow(name, data) {
-            console.log("add row", name, data['id']);
-            let path = "false";
-            if (data['save_video_flag'] == true) {
-                path = data['save_path'];
-            }
+            console.log("add row", name, data['name']);
+            let isSave = "false";
+            if (data['save_video_flag'] == true) { isSave = "true";}
             // console.log($('#camerasTable').find('tbody').children().length);
             let count = $('#camerasTable').find('tbody').children().length;
             $('#camerasTable').find('tbody')
                 .append($('<tr>').attr('id', "row_" + name)
                     .append($('<td>').append(count + 1))
-                    .append($('<td>').append(data['id']))
+                    .append($('<td>').append(name))
                     .append($('<td>').append(data['name']))
                     .append($('<td>').append(data['url']))
-                    .append($('<td>').append(path))
-                    .append($('<td>').append(data['save_video_flag']))
+                    .append($('<td>').append(data['save_path']))
+                    .append($('<td>').append(isSave))
                     .append($('<td>').append(Object.keys(data['borders']).length))
                     .append($('<td>').append('<a href="#" onclick="runCamera(this); return false;">Run</a>').attr('id', "row_run_" + name))
                     .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); confCamera(); return false;">Change</a>'))
@@ -292,8 +290,8 @@
                                                                     <th scope="col">ID</th>
                                                                     <th scope="col">Name</th>
                                                                     <th scope="col">URL</th>
-                                                                    <th scope="col">SaveToFile</th>
-                                                                    <th scope="col">Display</th>
+                                                                    <th scope="col">SavePath</th>
+                                                                    <th scope="col">isSaveResult</th>
                                                                     <th scope="col">Borders</th>
                                                                     <th scope="col">Status</th>
                                                                     <th scope="col">Edit</th>
@@ -303,8 +301,7 @@
                                                                     <tbody id='camerasTableBody'></tbody>
                                                                     </table>
                                                                     <div class="btn-group" role="group" aria-label="">
-                                                                        <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCamera(); return false;">New camera</button>
-                                                                        <button type="button" class="btn btn-secondary"  onclick="curCamId = null; confCameraFile(); return false;">New local file</button>
+                                                                        <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCameraNew(); return false;">New camera</button>
                                                                     </div>
                                                                     `;
         //function getCamerasList() {

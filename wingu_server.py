@@ -17,6 +17,7 @@ from middlewares import authorize
 # import asyncio
 import io, sys
 import sqlite3
+from shutil import copyfile
 import cv2 
 import json
 import os
@@ -107,23 +108,7 @@ async def ws_send_data(client, data, binary=False):
 
 
 
-async def saveConfig(ws, config):
-    res = {'OK':["saveConfig", config['tp'], config['name']]}
-    print(res)
-    fileName = os.path.join('config', config['tp'] + str(config['name'])+'.yaml')
-    try:
-        if os.path.isfile(fileName):
-            print("Create backup for config " + fileName)
-            # !!!!!!!!!!!!!!!!!!!!!!!!
-        with open(fileName, 'w', encoding='utf-8') as f:    
-            yaml.dump(config['data'], f)
-        #if manager in app:
-        #    app["manager"].updateConfig(config)
-    except:
-        #          log.error("Can not save config for " + fileName )
-        #          res = {"error":['saveConfig', config['tp'], config['name']]}
-         print(sys.exc_info())
-        #    await ws.send_json(res)
+        # await ws.send_json({"error":['saveConfig', config['tp'], config['name']]})
 
 class Server:
     def __init__(self):
@@ -148,7 +133,7 @@ class Server:
                 #('GET',  '/camerasList', camerasList),
                 ('GET',  '/getFileImg', self.getFileImg),
                 #('GET',  '/filesList', self.getFilesList),
-                ('GET',  '/update', self.updateFrame),
+                ('GET',  '/update', self.update),
                 #('POST',  '/saveConfig', self.saveConfig),
 
             ]
@@ -207,21 +192,58 @@ class Server:
         #    print(msg_json)
         #    return  web.json_response({'answer':['addToQueue','ok',request]})
 
+    async def saveConfig(self, ws, config):
+        res = {'OK':["saveConfig", config['tp'], config['name']]}
+        print(res)
+        fileName = os.path.join('config', config['tp'] + str(config['name'])+'.yaml')
+        try:
+            if os.path.isfile(fileName):
+                copyfile(fileName, fileName+"."+str(time.time()))
+                print("Create backup for config " + fileName)
+            with open(fileName, 'w', encoding='utf-8') as f:    
+                yaml.dump(config['data'], f)
+            if 'manager' in self.app:
+                await self.app["manager"].addConfig(config['name'], config['tp'], config['data'], client=ws)
+        except:
+            self.log.error("Can not save config for " + fileName )
+            print(sys.exc_info())
+
     async def Index(self, request):
         return web.HTTPFound('static/cameras.html')
 
-    async def updateFrame(self, request):
-        try:
-            print("server frame updated")
-            if "manager" in self.app:
-                data = self.app["manager"].getFrame()
-                if data is not None:
-                    data = data.tobytes()
-                    for client in self.app['websocketscmd']:
-                        await client.send_bytes(data)
-        # return web.Response(text="1")
-        except:
-            print(sys.exc_info())
+    async def update(self, request):
+        params = request.rel_url.query
+        print("Server updated", params)
+        if params['cmd']=='startManager':
+            print("startManager!!!!")
+        elif params['cmd']=='startGPU':
+            print("start GPU", params['name'])
+        elif params['cmd']=='stopStream':
+            print("start GPU", params['name'])
+            if 'websocketscmd' in self.app:
+                if 'manager' in self.app:
+                    for ws in self.app['websocketscmd']:
+                        await ws.send_json({"OK":['stopStream', params['name']]})
+        elif params['cmd']=='configUpdated':
+            print("start configUpdated", params['type'])
+            # broadcast updates
+            if 'websocketscmd' in self.app:
+                if 'manager' in self.app:
+                    for ws in self.app['websocketscmd']:
+                        await self.app["manager"].getStreamsConfig(ws)
+        elif params['cmd']=="frame":
+                try:
+                    print("server frame updated")
+                    if "manager" in self.app:
+                        data = self.app["manager"].getFrame()
+                        if data is not None:
+                            data = data.tobytes()
+                            for client in self.app['websocketscmd']:
+                                await client.send_bytes(data)
+                except:
+                    print(sys.exc_info())
+        else:
+            print("Server update Unknown caommnd")
 
     async def WebSocketCmd(self, request):
         ws = web.WebSocketResponse()
@@ -256,8 +278,7 @@ class Server:
                             print(sys.exc_info())
                             await ws.send_json({"error":['getManagerData', msg.data]})
                     elif msg_json['cmd'] == 'saveStream':
-                        print("saveStream", msg_json['config'])                    
-                        await saveConfig(ws, msg_json['config'])
+                        await self.saveConfig(ws, msg_json['config'])
                     elif msg_json['cmd'] == 'stopGetStream':
                         print("stopGetStream", msg_json['stream_id'])
                         if 'manager' in self.app:
@@ -291,7 +312,7 @@ class Server:
                         print("stopStream", msg_json['stream_id'])
                         if 'manager' in self.app:
                             try:
-                               await self.app['manager'].stopStream(msg_json['stream_id'], ws)
+                               self.app['manager'].stopStream(msg_json['stream_id'])
                             except:
                                 print(sys.exc_info())
                                 await ws.send_json({"error":["stopStream", msg_json['stream_id'], "exception on server"]})
@@ -361,11 +382,12 @@ class Server:
     async def on_shutdown(self, app):
         print("start on_shutdown")
         if  'websocketscmd' in app:
-            for ws in self.app['websocketscmd']:
+            wss = list(self.app['websocketscmd'])
+            for ws in wss:
                 try:
                     await ws.close(code=1001, message='Server shutdown')
                 finally:
-                    request.app['websockets'].discard(ws)
+                    self.app['websocketscmd'].discard(ws)
 
         #  background task 
 

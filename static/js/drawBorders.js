@@ -8,7 +8,7 @@
 // var fileBordersList = {};
 
 var fileImgs = {};
-
+var tmp_config_borders = {}
 var drawBorders = {};
 var drawActiveBorder = null;
 var drawBorderCircleradius = 6;
@@ -38,28 +38,48 @@ function validedName() {
 
 function showImgBorders() {
     console.log("showImgBorders", curCamId);
-    //drawBorders = 
-    if ($("#result_image").src != "" && $('#addStream_url').val() != "") {
-        let fileCurVideoFilePath = $('#addStream_url').val();
+    let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
+    let isNotExist = false;
+    if (curCamId == undefined) {
+        let cam_id = $('#addStream_id').val();
+        if (streamsConfigList.hasOwnProperty(cam_id)) {
+            alert("This stream id already exist! Please will give other name.");
+        } else {
+            isNotExist = true;
+            tmp_config_borders = {};
+        }         
+    }
+    if (isNotExist) {
+        //drawBorders = 
+        if ($("#result_image").src != "" && $('#addStream_url').val() != "") {
+            let fileCurVideoFilePath = $('#addStream_url').val();
             // console.log(!(fileCurVideoFilePath in fileImgs), fileImgs);
-        if (!(fileCurVideoFilePath in fileImgs)) { getFileImgAjax(fileCurVideoFilePath); }
-        let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
-        drawBorders = streamsConfigList[curCamId]['borders'];
-        for (var key in drawBorders) {
-            console.log("showImgBorders", key, drawBorders[key])
-            let data = [
-                [parseInt(drawBorders[key][0][0] * 1.3), drawBorders[key][0][1]],
-                [parseInt(drawBorders[key][1][0] * 1.3), drawBorders[key][1][1]]
-            ];
-            console.log("data", data);
-            drawNewBorder(key, data);
+            if (!(fileCurVideoFilePath in fileImgs)) {
+                getFileImgAjax(fileCurVideoFilePath);
             }
-            console.log(drawBorders);        
-        $('#fileModalImg').modal('show');
-        makeDraggable();
-    } else {
-        console.log("Can not load Image!");
-        //alert("Can not load Image!");
+            
+            if (curCamId != undefined) {
+                console.log("streamsConfigList[curCamId]['borders']", streamsConfigList[curCamId]['borders'])
+                drawBorders = streamsConfigList[curCamId]['borders'];
+                for (var key in drawBorders) {
+                    console.log("showImgBorders", key, drawBorders[key])
+                    let data = [
+                        [parseInt(drawBorders[key][0][0] * 1.3), drawBorders[key][0][1]],
+                        [parseInt(drawBorders[key][1][0] * 1.3), drawBorders[key][1][1]]
+                    ];
+                    console.log("data", data);
+                    drawNewBorder(key, data);
+                }
+                console.log(drawBorders);
+            } else {
+                console.log("new border"); 
+            }
+            $('#fileModalImg').modal('show');
+            makeDraggable();
+        } else {
+            console.log("Can not load Image!");
+            //alert("Can not load Image!");
+        }
     }
 }
 
@@ -90,17 +110,25 @@ function getFileImgAjax() {
 
 function fileSaveBorders() {
     let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
-    drawBorders_old = streamsConfigList[curCamId]['borders'];
-//    console.log(drawBorders_old, drawBorders);
-    //if (drawBorders_old != drawBorders) {
-    for (var key in drawBorders) {
-        //console.log("showImgBorders", key, drawBorders[key])
-        drawBorders[key][0][0] = parseInt(drawBorders[key][0][0] / 1.3);
-        drawBorders[key][1][0] = parseInt(drawBorders[key][1][0] / 1.3);
-    };
-    streamsConfigList[curCamId]['borders'] = drawBorders;
-    localStorage.setItem('streamsConfigList', JSON.stringify(streamsConfigList));
-    $('#addStream_borders_number').val(Object.keys(streamsConfigList[curCamId]['borders']).length);
+    if (streamsConfigList.hasOwnProperty(curCamId)) {
+        drawBorders_old = streamsConfigList[curCamId]['borders'];
+        //    console.log(drawBorders_old, drawBorders);
+        //if (drawBorders_old != drawBorders) {
+        } else {   }
+        for (var key in drawBorders) {
+            //console.log("showImgBorders", key, drawBorders[key])
+            drawBorders[key][0][0] = parseInt(drawBorders[key][0][0] / 1.3);
+            drawBorders[key][1][0] = parseInt(drawBorders[key][1][0] / 1.3);
+        };
+    console.log("cam_id", curCamId)
+    if (curCamId != undefined) {
+        streamsConfigList[curCamId]['borders'] = drawBorders;
+        localStorage.setItem('streamsConfigList', JSON.stringify(streamsConfigList));
+        $('#addStream_borders_number').val(Object.keys(streamsConfigList[curCamId]['borders']).length);
+    } else {
+        tmp_config_borders = drawBorders;
+        $('#addStream_borders_number').val(Object.keys(tmp_config_borders).length);
+    }
 }
 
 function fileCancelBorders() {
@@ -119,9 +147,8 @@ function saveToServer() {
         console.log("add to queue");
         let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
         let defaultConfig = {
-            'id': 'test00',
             'url': 'video/39.avi',
-            'isFromFile': true,
+            'isFromFile': false,
             'save_path': 'video/39_out.avi',
             'body_min_w': 64,
             'path_track': 20,
@@ -139,26 +166,32 @@ function saveToServer() {
         //id, url, skip_frames, isFromFile, save_path, save_video_res, save_video_flag
         if (curCamId in streamsConfigList) {
             if (streamsConfigList[curCamId].hasOwnProperty('url')) {
-                console.log("curCamId")
+                console.log("curCamId");
                 defaultConfig = streamsConfigList[curCamId];
             }
+        } else {
+            defaultConfig['borders'] = tmp_config_borders;
         }
         //for (var key in defaultConfig) {
         // console.log("$('#addStream_isFromFile').val()", $('#addStream_isFromFile').prop('checked'))
-        defaultConfig['id'] = $('#addStream_id').val();
+        // defaultConfig['id'] = $('#addStream_id').val();
+        addStream_save_video_flag
+        let name = $('#addStream_id').val();
+        let autostart = $('#addStream_autostart').prop('checked');
         defaultConfig['name'] = $('#addStream_name').val();
         defaultConfig['url'] = $('#addStream_url').val();
-        defaultConfig['skip_frames'] = $('#addStream_skip_frames').val();
+        defaultConfig['skip_frames'] = parseInt($('#addStream_skip_frames').val());
         defaultConfig['isFromFile'] = $('#addStream_isFromFile').prop('checked');
         defaultConfig['save_path'] = $('#addStream_save_path').val();
         defaultConfig['save_video_flag'] = $('#addStream_save_video_flag').prop('checked');
         //}
         console.log("defaultConfig ready", defaultConfig);
-        streamsConfigList[curCamId] = defaultConfig;
-        localStorage.setItem('streamsConfigList', JSON.stringify(streamsConfigList));
+        // streamsConfigList[curCamId] = defaultConfig;
+        // localStorage.setItem('streamsConfigList', JSON.stringify(streamsConfigList));
         if (wsCmd == null) { WebSocketCmd();}
          //wsCmd.send(JSON.stringify({ "cmd": "getManagerData" }));
-        wsCmd.send(JSON.stringify({ "cmd": "saveStream", "config": { "name": curCamId, "tp": 'Stream_', "data": defaultConfig} }));
+
+        wsCmd.send(JSON.stringify({ "cmd": "saveStream", "config": { "name": name, "tp": 'Stream_', "data": defaultConfig, "autostart": autostart} }));
     } else {
         alert("Please add some borders!!!!");
     }

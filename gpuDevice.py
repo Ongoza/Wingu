@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 import tensorflow as tf
 import asyncio
+from requests_futures import sessions
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
 
 from tf2_yolov4.anchors import YOLOV4_ANCHORS
@@ -27,6 +28,8 @@ class GpuDevice(threading.Thread):
         self.id = id
         self.log = log
         self.cams = {}
+        self.server_URL = "http://localhost:8080/update?"
+        self.session = sessions.FuturesSession(max_workers=2)
         self.proceedTime = 0
         self.device = str(device_name)
         try:
@@ -52,6 +55,7 @@ class GpuDevice(threading.Thread):
             self.ready = True
             # self.isRunning = False
             self.log.debug(device_name +" with name "+ str(self.id)+ " created ok id:"+ str(self.device))
+            self.session.get(self.server_URL + "cmd=startGPU&name="+str(id))
             self.start()
         except:
             print("GpuDevice init Can not start GPU for " + str(self.id) + " ", self.device, self.config)            
@@ -67,6 +71,14 @@ class GpuDevice(threading.Thread):
     def getCamsList(self):
         # check if cam exists then update cams list and retur it
         return self.cams
+
+    def ws_send_data(self, cmd):
+        try:
+            self.session.get(self.server_URL+'cmd='+cmd)
+            #future.result()
+            #print("ok")
+        except:
+             pass
 
     def startCam(self, camConfig, cam_id, iter, client=None):
         try:
@@ -100,6 +112,8 @@ class GpuDevice(threading.Thread):
         try:
             self.cams[id].kill()
             del self.cams[id]
+            # self.session.get(self.server_URL)
+            # self.ws_send_data("delCam")
         except:
             self.log.debug("GpuDevice can not stop cam "+ id)
 
