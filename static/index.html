@@ -1,47 +1,134 @@
-﻿<!--
-    TODO
-        https
-        логин/логаут
-        возможность выбора камеры с помощью чек поинта
-        возможность задания временного интервала с помощью каледаря от до
-        кнопка показать данные за интервал в виде графика viz timeline или талицы по часам
-        добавить кнопку "Живое видео"
-        информация о системе:
-                       процессор: температура, загрузка процессора
-                       видеокарты: для каждой температура, загрузка памяти  
-                       диск: свободное место/общий объем
-                       видеопотоки: сколько обрабатывается
-       график камеры: для каждой сколько вошло/вышло для каждой линии
-       настройки просмотра статистики (выбрать линии, дату начала, дату конца)
-       суммарное количество и расперделение на графике.
--->
-
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>"Wingu"</title>
+    <title>"Wingu:Home"</title>
     <link rel="icon" type="image/png" href="lib/favicon.png">
     <link href="lib/bootstrap.min.css" rel="stylesheet">
     <link href="lib/flag-icon.min.css" rel="stylesheet">
+    <link href="js/main.css" rel="stylesheet">
     <script src="lib/jquery-3.5.1.min.js"></script>
-
+    <script src="lib/moment.min.js"></script>
     <script src="lib/bootstrap.min.js"></script>
-    <!-- <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css">
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.1.0/css/flag-icon.min.css" rel="stylesheet">
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"></script> -->
-    <!-- <script src="js/websocket.js"></script> -->
 
+    <script src="lib/daterangepicker.js"></script>
+    <link rel="stylesheet" href="lib/daterangepicker.css">
+
+    <link rel="stylesheet" type="text/css" href="lib/jquery.dataTables.min.css" />
+    <script type="text/javascript" src="lib/datatables.min.js"></script>
+
+    <script src="js/websocket.js"></script>
     <script src="js/nav.js"></script>
+    <!--<link rel="stylesheet" type="text/css" href="lib/jquery.datetimepicker.min.css" />-->
+
     <script>
 
+        function addRowsStat(rows) {
+            console.log("addRowsStat", rows);
+            let table = $('#tableStat').find('tbody');
+            let count = 0;
+            let in_users = 0;
+            let out_users = 0;
+            for (var i in rows) {
+                data = rows[i]
+                let name = data['id'];
+                let inOut = "In";
+                if (data['InOut'] == 1) { inOut = "Out"; in_users++; }
+                else { out_users++; }
+                table
+                    .append($('<tr>').attr('id', "stat_" + name)
+                        .append($('<td>').append(count + 1).attr('id', "stat_num_" + (count + 1).toString()))
+                        .append($('<td>').append(data['name']).attr('id', "stat_name_" + name))
+                        .append($('<td>').append(data['border']).attr('id', "stat_border_" + name))
+                        .append($('<td>').append(inOut).attr('id', "stat_inOut_" + name))
+                        .append($('<td>').append(moment.unix(data['time']).format()).attr('id', "stat_time_" + name))
+                    );
+            }
+            console.log("in_users", in_users, out_users);
+            $('#in_users').text(in_users);
+            $('#out_users').text(out_users);
+        }
+
+        $(function () {
+            $('input[name="datetimes"]').daterangepicker({
+                timePicker: true,
+                startDate: moment().startOf('hour'),
+                endDate: moment().startOf('hour').add(32, 'hour'),
+                locale: { format: 'M/DD HH:MM' }
+            });
+        });
+
+
+        $(document).ready(function () {
+            let data = {
+                "users": [
+                    { 'id': 'Cherk_left', 'name': 'Chercasy left', 'border': 'Border_0', 'InOut': 0, 'time': 1611594690 },
+                    { 'id': 'Cherk_left', 'name': 'Chercasy left', 'border': 'Border_0', 'InOut': 0, 'time': 1611594691 },
+                    { 'id': 'Cherk_left', 'name': 'Chercasy left', 'border': 'Border_0', 'InOut': 1, 'time': 1611594692 },
+                    { 'id': 'Cherk_left', 'name': 'Chercasy left', 'border': 'Border_0', 'InOut': 0, 'time': 1611594693 },
+                    { 'id': 'Cherk_right', 'name': 'Chercasy right', 'border': 'Border_0', 'InOut': 1, 'time': 1611594694 },
+                ]
+            };
+            addRowsStat(data['users']);
+            //$('#periodpickerstart').periodpicker({
+            //    end: '#periodpickerend'
+            //});
+
+
+            $('#tableStat').DataTable({
+                select: true,
+                columnDefs: [{
+                    targets: [0],
+                    orderData: [0, 1]
+                }, {
+                    targets: [1],
+                    orderData: [1, 0]
+                }, {
+                    targets: [4],
+                    orderData: [4, 0]
+                }]
+            });
+        });
+
     </script>
+
 </head>
 <body>
     <div id="menu"></div>
     <h1 id="headMain"></h1>
-    <div id="content">
+    <br>
+    <div class="card">
+        <div class="card-header">Request to Database for data</div>
+        <div class="card-body">
+            <div id="dbRequest">
+                <input type="text" name="datetimes" id="timeRange" />
 
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Send</button>
+            </div>
+        </div>
     </div>
+    <div class="card">
+        <div>
+            <b>Total users in request</b>
+            <span class="badge badge-primary">In:<span id="in_users"></span></span>
+            <span class="badge badge-info">Out:<span id="out_users"></span></span>
+
+        </div>
+        <div class="card-body">                   
+            <table id="tableStat" class="display" style="width:100%">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Camera</th>
+                        <th>Border</th>
+                        <th>In|Out</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
 </body>
 </html>

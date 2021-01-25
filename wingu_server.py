@@ -26,6 +26,7 @@ import hashlib
 import ssl
 from views.websocket import WebSocket
 import logging
+import logging.handlers
 import yaml
 import time
 import weakref
@@ -115,14 +116,24 @@ class Server:
         init_db()
         self.managerConfigFile = "default"
         self.stop = 5
-        self.log = logging.getLogger('app')
-        self.log.setLevel(logging.DEBUG)
+
+        #logging.getLogger().setLevel(logging.NOTSET)
+        logging.getLogger().setLevel(logging.DEBUG)
         f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        ch.setFormatter(f)
-        self.log.addHandler(ch)
-        self.log.addHandler(ch)
+
+        console = logging.StreamHandler(sys.stdout)
+        console.setLevel(logging.DEBUG)
+        console.setFormatter(f)
+        logging.getLogger().addHandler(console)
+
+        # Add file rotating handler, with level DEBUG
+        fileLog = logging.handlers.RotatingFileHandler('sever.log', 'a', 100000, 5)
+        fileLog.setLevel(logging.DEBUG)
+        fileLog.setFormatter(f)
+        logging.getLogger().addHandler(fileLog)
+
+        self.log = logging.getLogger('app')
+
         self.routes = [
                 ('GET', '/',  self.Index),
                 ('GET', '/ws',  WebSocket),
@@ -209,7 +220,7 @@ class Server:
             print(sys.exc_info())
 
     async def Index(self, request):
-        return web.HTTPFound('static/cameras.html')
+        return web.HTTPFound('static/index.html')
 
     async def update(self, request):
         params = request.rel_url.query
@@ -440,4 +451,5 @@ if __name__ == "__main__":
         server = Server()
     except:
         print("stop bu exception")
+        print(sys.exc_info())
     print("server stooped Ok")

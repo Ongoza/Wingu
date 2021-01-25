@@ -284,26 +284,26 @@
         let divTable = document.createElement('div');
         divTable.id = 'camerasTableDiv';
         divTable.innerHTML = `<table id="camerasTable" class="table table-striped table-hover table-sm table-bordered">
-                                                                    <thead class="thead-dark">
-                                                                    <tr>
-                                                                    <th scope="col">#</th>
-                                                                    <th scope="col">ID</th>
-                                                                    <th scope="col">Name</th>
-                                                                    <th scope="col">URL</th>
-                                                                    <th scope="col">SavePath</th>
-                                                                    <th scope="col">isSaveResult</th>
-                                                                    <th scope="col">Borders</th>
-                                                                    <th scope="col">Status</th>
-                                                                    <th scope="col">Edit</th>
-                                                                    <th scope="col">Delete</th>
-                                                                    </tr>
-                                                                    </thead>
-                                                                    <tbody id='camerasTableBody'></tbody>
-                                                                    </table>
-                                                                    <div class="btn-group" role="group" aria-label="">
-                                                                        <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCameraNew(); return false;">New camera</button>
-                                                                    </div>
-                                                                    `;
+            <thead class="thead-dark">
+            <tr>
+            <th scope="col">#</th>
+            <th scope="col">ID</th>
+            <th scope="col">Name</th>
+            <th scope="col">URL</th>
+            <th scope="col">SavePath</th>
+            <th scope="col">isSaveResult</th>
+            <th scope="col">Borders</th>
+            <th scope="col">Status</th>
+            <th scope="col">Edit</th>
+            <th scope="col">Delete</th>
+            </tr>
+            </thead>
+            <tbody id='camerasTableBody'></tbody>
+            </table>
+            <div class="btn-group" role="group" aria-label="">
+                <button type="button" class="btn btn-secondary" onclick="curCamId = null; confCameraNew(); return false;">New camera</button>
+            </div>
+            `;
         //function getCamerasList() {
         //    if (wsCmd != null) {
         //        if (wsCmd.readyState == 1) {
