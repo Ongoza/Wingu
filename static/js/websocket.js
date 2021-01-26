@@ -21,7 +21,7 @@ function WebSocketCmd() {
                   console.log("Message is received!");
                    try {
                        if (evt.data instanceof Blob) {
-                           //console.log("Binary data!");
+                           console.log("Binary data!", evt.data);
                            showFrame(evt.data);
                        } else {
                           let jsonData = JSON.parse(evt.data);

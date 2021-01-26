@@ -45,9 +45,10 @@
         }
 
         function updateViewOk(jsonData) {
+            console.log("updateViewOk(jsonData)", jsonData['OK'][0], jsonData['OK'][1])
             console.log("updateViewOk(jsonData)", "#row_run_" + jsonData["OK"][1], $('#row_run_' + jsonData[1]));
             if (jsonData["OK"][0] == "stopStream") {
-                console.log("updateViewOk(jsonData) 2", jsonData[1]);
+                console.log("updateViewOk(jsonData) 2", jsonData['OK'][1]);
                 //.append('<a href="#" onclick="runCamera(this); return false;">Run</a>').attr('id', "row_run_" + name))
                 // onclick = "runCamera(this); return false;"
                 $('#row_run_' + jsonData["OK"][1]).first().html('<a href="#" onclick="runCamera(this); return false;" >Run</a>'); // .bind("click", event);

@@ -55,32 +55,25 @@ class GpuDevice(threading.Thread):
             self.ready = True
             # self.isRunning = False
             self.log.debug(device_name +" with name "+ str(self.id)+ " created ok id:"+ str(self.device))
-            self.session.get(self.server_URL + "cmd=startGPU&name="+str(id))
+            self.session.get(self.server_URL + "cmd=GpuStart&name="+str(id)+"&status=OK")
             self.start()
         except:
             print("GpuDevice init Can not start GPU for " + str(self.id) + " ", self.device, self.config)            
             # traceback.print_exception(*sys.exc_info()) 
+            self.session.get(self.server_URL + "cmd=GpuStart&name="+str(id)+"&status=error&module=Gpu")
             print(sys.exc_info())
             self.kill()
 
-    def run(self):
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(self._run())
-        loop.close()
+    #def run(self):
+    #    loop = asyncio.new_event_loop()
+    #    loop.run_until_complete(self._run())
+    #    loop.close()
 
     def getCamsList(self):
         # check if cam exists then update cams list and retur it
         return self.cams
 
-    def ws_send_data(self, cmd):
-        try:
-            self.session.get(self.server_URL+'cmd='+cmd)
-            #future.result()
-            #print("ok")
-        except:
-             pass
-
-    def startCam(self, camConfig, cam_id, iter, client=None):
+    def startCam(self, camConfig, cam_id, iter):
         try:
             print("GpuDevice iter", iter)
             if iter < 100:
@@ -91,7 +84,7 @@ class GpuDevice(threading.Thread):
                     #    self.start()
                     #    time.sleep(3)
                     print("GpuDevice Try start videoCapture obj")
-                    cam = videoCapture.VideoCapture(camConfig, self.config, self.id, cam_id, self.log, client)
+                    cam = videoCapture.VideoCapture(camConfig, self.config, self.id, cam_id, self.log)
                     if cam is not None:
                         self.cams[cam_id] = cam
                         self.log.debug("GpuDevice "+str(self.device)+" Current num of cameras:" + str(len(self.cams)))
@@ -100,22 +93,28 @@ class GpuDevice(threading.Thread):
                 else:                
                     time.sleep(1)
                     print("try one more time")
-                    self.startCam(camConfig, cam_id, iter, client)
+                    self.startCam(camConfig, cam_id, iter)
             else:
                 self.log.info("GpuDevice "+str(self.id)+" is not ready for start too long time!! cam="+str(cam_id))
         except:
             print(sys.exc_info())
             self.log.debug("GpuDevice "+str(self.id)+" exception on stream start cam="+str(cam_id))
 
-    def stopCam(self, id):
-        self.log.debug("GpuDevice "+str(self.id)+'stop video: '+str(id))
+    def send_data(self, data):
+        print("send data", data)
         try:
-            self.cams[id].kill()
-            del self.cams[id]
-            # self.session.get(self.server_URL)
-            # self.ws_send_data("delCam")
+            self.session.get(self.server_URL+data) 
+        except:
+            print("GpuDevice error send data")
+
+    def stopCam(self, cam_id):
+        self.log.debug("GpuDevice "+str(self.id)+' stop video: '+str(cam_id))
+        try:
+            self.cams[cam_id].kill()
+            del self.cams[cam_id]
         except:
             self.log.debug("GpuDevice can not stop cam "+ id)
+            self.send_data("cmd=stopStream&name=" + cam_id + "&status=error&module=Gpu")
 
     def kill(self):
         try:
@@ -129,10 +128,11 @@ class GpuDevice(threading.Thread):
             time.sleep(4)
             self.log.info("GPU "+str(self.id)+" stopped")        
             self.killed = True
+            self.session.get(self.server_URL + "cmd=GpuStop&name="+str(id)+"&status=OK")
         except:
             print("can not stop some cams")
 
-    async def _run(self):
+    def run(self):
         self.log.debug("GpuDevice starting "+str(self.id))
         while not self._stopevent.isSet():
             # print("GpuDevice tik")
@@ -164,7 +164,7 @@ class GpuDevice(threading.Thread):
                         boxes, scores, classes, valid_detections = self.detector.predict(frames_tf)
                     self.proceedTime = time.time() - start
                     for j in range(len(frames)):
-                       await cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
+                       cams[j].track(boxes[j], scores[j], classes[j], frames[j]) 
                 except:
                     self.log.error("GpuDevice "+str(self.id)+" skip frame by exception")
                     print(sys.exc_info(), type(frames_tf))

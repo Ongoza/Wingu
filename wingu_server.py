@@ -91,6 +91,24 @@ async def save_statistic(type_data, id, data):
         print("save data")
         print(sys.exc_info())
 
+            #async def save_statistic(self, borders_arr):
+    #    # print("VideoCapture start save stat in stream")
+    #    try:
+    #        for borders in borders_arr:
+    #            for item in borders.keys():
+    #                sql = f'INSERT INTO {self.db_table_name}(border, stream_id, in_out, time) VALUES("{item}", "{self.id}", {int(borders[item])}, {int(time.time())})'
+    #                # print("sql borders", sql)
+    #                async with aiosqlite.connect(self.db_path) as db:
+    #                    await db.execute(sql)
+    #                    await db.commit()
+    #    except:
+    #        self.log.debug("VideoCapture Error save data")
+    #        print(sys.exc_info())
+
+    # read frames as soon as they are available, keeping only most recent one
+    # 0. CV_CAP_PROP_POS_MSEC Current position of the video file in milliseconds.
+    # 1. CV_CAP_PROP_POS_FRAMES 0-based index of the frame to be decoded/captured next.
+
 async def ws_send_data(client, data, binary=False):
     try:
         print("data=", len(data), client)
@@ -133,6 +151,7 @@ class Server:
         logging.getLogger().addHandler(fileLog)
 
         self.log = logging.getLogger('app')
+        self.live_streams = {}
 
         self.routes = [
                 ('GET', '/',  self.Index),
@@ -223,38 +242,28 @@ class Server:
         return web.HTTPFound('static/index.html')
 
     async def update(self, request):
-        params = request.rel_url.query
-        print("Server updated", params)
-        if params['cmd']=='startManager':
-            print("startManager!!!!")
-        elif params['cmd']=='startGPU':
-            print("start GPU", params['name'])
-        elif params['cmd']=='stopStream':
-            print("start GPU", params['name'])
-            if 'websocketscmd' in self.app:
-                if 'manager' in self.app:
-                    for ws in self.app['websocketscmd']:
-                        await ws.send_json({"OK":['stopStream', params['name']]})
-        elif params['cmd']=='configUpdated':
-            print("start configUpdated", params['type'])
-            # broadcast updates
-            if 'websocketscmd' in self.app:
-                if 'manager' in self.app:
-                    for ws in self.app['websocketscmd']:
-                        await self.app["manager"].getStreamsConfig(ws)
-        elif params['cmd']=="frame":
-                try:
-                    print("server frame updated")
-                    if "manager" in self.app:
-                        data = self.app["manager"].getFrame()
-                        if data is not None:
-                            data = data.tobytes()
-                            for client in self.app['websocketscmd']:
-                                await client.send_bytes(data)
-                except:
-                    print(sys.exc_info())
-        else:
-            print("Server update Unknown caommnd")
+        try:
+            params = request.rel_url.query
+            print("Server updated", params)
+            if 'cmd' in params and "name" in params and 'status' in params:
+                print("universal ok!!!!", params['cmd'], params['name'], params['status'])
+                if 'websocketscmd' in self.app:
+                    if 'manager' in self.app:
+                        res = {}
+                        res[params['status']] = [params['cmd'],params['name']]
+                        print("res", res)
+                        for ws in self.app['websocketscmd']:
+                            await ws.send_json(res)
+            elif params['cmd']=='configUpdated':
+                print("start configUpdated", params['type'])
+                # broadcast updates
+                if 'websocketscmd' in self.app:
+                    if 'manager' in self.app:
+                        for ws in self.app['websocketscmd']:
+                            await self.app["manager"].getStreamsConfig(ws)
+            else:
+                print("Server update Unknown caommnd")
+        except: print("server except in update")
 
     async def WebSocketCmd(self, request):
         ws = web.WebSocketResponse()
@@ -292,31 +301,31 @@ class Server:
                         await self.saveConfig(ws, msg_json['config'])
                     elif msg_json['cmd'] == 'stopGetStream':
                         print("stopGetStream", msg_json['stream_id'])
-                        if 'manager' in self.app:
-                            try:
-                               await self.app['manager'].stopGetStream(ws, msg_json['stream_id'])
-                            except:
-                                await ws.send_json({"error":["stopStream", msg_json['stream_id'], "exception on server"]})
-                        else:
-                           await ws.send_json({"error":["stopGetStream", msg_json['stream_id'], "mamanger is not running"]})
-
+                        self.removeLiveStream(ws, msg_json['stream_id'])
+                        await ws.send_json({"OK":["stopGetStream", msg_json['stream_id'], "server"]})
                     elif msg_json['cmd'] == 'startGetStream':
                         print("startGetStream", msg_json['stream_id'])
                         if 'manager' in self.app:
-                            try:
-                               await self.app['manager'].startGetStream(ws, msg_json['stream_id'])
-                            except:
-                                await ws.send_json({"error":["startStream", msg_json['stream_id'], "exception on server"]})
+                            if msg_json['stream_id'] in self.app['manager'].camsList:
+                                if msg_json['stream_id'] in self.live_streams:
+                                    if ws not in self.live_streams[msg_json['stream_id']]:
+                                       self.live_streams[msg_json['stream_id']].append[ws]
+                                else:
+                                    self.live_streams[msg_json['stream_id']] = [ws]
+                                print("startGetStream", self.live_streams)                                    
+                                await ws.send_json({"OK":["startGetStream", msg_json['stream_id'], "server"]})
+                            else:
+                                await ws.send_json({"error":["startGetStream", msg_json['stream_id'], "server"]})
                         else:
                            await ws.send_json({"error":["startGetStream", msg_json['stream_id'], "mamanger is not running"]})
                     elif msg_json['cmd'] == 'startStream':
                         print("startStream", msg_json['stream_id'])
                         if 'manager' in self.app:
                             try:
-                               await self.app['manager'].startStream(msg_json['stream_id'], ws)
+                               self.app['manager'].startStream(msg_json['stream_id'], ws)
                             except:
-                                print(sys.exc_info())
-                                await ws.send_json({"error":["startStream", msg_json['stream_id'], "exception on server"]})
+                               print(sys.exc_info())
+                               await ws.send_json({"error":["startStream", msg_json['stream_id'], "exception on server"]})
                         else:
                            await ws.send_json({"error":["startStream", msg_json['stream_id'], "mamanger is not running"]})
                     elif msg_json['cmd'] == 'stopStream':
@@ -324,30 +333,12 @@ class Server:
                         if 'manager' in self.app:
                             try:
                                self.app['manager'].stopStream(msg_json['stream_id'])
+                               del self.live_streams[msg_json['stream_id']]
                             except:
-                                print(sys.exc_info())
-                                await ws.send_json({"error":["stopStream", msg_json['stream_id'], "exception on server"]})
+                               print(sys.exc_info())
+                               await ws.send_json({"error":["stopStream", msg_json['stream_id'], "exception on server"]})
                         else:
                            await ws.send_json({"error":["stopStream", msg_json['stream_id'], "mamanger is not running"]})
-
-                        # await ws.send_json({'OK':["startStream", msg_json['stream_id']]})
-                    #elif msg_json['cmd'] == 'getCameras':
-                    #    # print(camerasListData)
-                    #    await ws.send_json(camerasListData)
-                    #elif msg_json['cmd'] == 'getFileImg':
-                    #    print("testImg")
-                    #    #arr_symb = np.fromstring('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', dtype=np.uint8)
-                    #    #uid_g = np.append(np.random.choice(arr_symb, 7), np.uint8(1))
-                    #    img = cv2.imread('video/cars.jpg')
-                    #    res = cv2.imencode('.jpg', img)[1]
-                    #    uid_g = np.array([78, 55, 68, 79, 114, 97, 114, 1], dtype=np.uint8)
-                    #    # N7DOrar
-                    #    res = np.append(res, uid_g)
-                    #    #data = np.array([1,2], dtype=np.uint8)
-                    #    #res = np.concatenate(res, data)
-                    #    # print("res",type(res), res.dtype, res.size, uid_g, res[-8:])
-                    #    # cv2.imwrite("video/dd.jpg", img)
-                    #    await ws.send_bytes(res.tobytes())
                     else:
                         print("error websocket command")
                         await ws.send_json({"error":['unknown', msg.data]})
@@ -363,6 +354,7 @@ class Server:
             except:
                 print("server exceptption on stopGetStream on close connection")
                 print(sys.exc_info())
+        self.removeLiveStreams(ws)
         request.app['websocketscmd'].remove(ws)
         return ws
 
@@ -409,8 +401,51 @@ class Server:
                 finally:
                     self.app['websocketscmd'].discard(ws)
 
-        #  background task 
 
+    def removeLiveStreams(self, ws):
+        for stream in list(self.live_streams):
+            self.removeLiveStream(self, ws, stream) 
+
+    def removeLiveStream(self, ws, stream):
+        print('removeLiveStream', stream)
+        try:
+            if ws in self.live_streams[stream]:
+                self.live_streams[stream].remove(ws)
+        except:
+            print("except remove client from stream")
+            print(sys.esc_info())
+        if len(self.live_streams[stream]) == 0:
+            try:
+                del self.live_streams[stream]
+            except:
+                 print("except remove stream")
+
+    async def send_streams(self):
+        for stream in list(self.live_streams):
+            if self.live_streams[stream]:
+                try:
+                    if 'manager' in self.app:
+                        frame = self.app['manager'].getCamFrame(stream)
+                        if frame is not None:
+                            if frame.any():
+                                tr, frame_jpg = cv2.imencode('.jpg', frame)
+                                if tr:
+                                    data = frame_jpg.tobytes()
+                                    for ws in self.live_streams[stream]:
+                                        await self.send_binary(ws, data, stream)
+                except: 
+                    print("error convert jpg")
+            else:
+                del self.live_streams[stream]
+
+    async def send_binary(self, ws, data, stream):
+        try:
+            await ws.send_bytes(data)
+        except:
+            print("websocket is not available for stream")
+            self.removeLiveStream(ws, stream)
+
+        #  background task 
     async def background_process(self):
         #await self.try_make_db()
         while True:
@@ -419,19 +454,20 @@ class Server:
             try:
                 #await save_statistic("intersetions", "file_0", ["border_a","border_b"])
                 # print("server tik")
+                if 'manager' in self.app:
+                    stats = self.app['manager'].getCamsStat()
+                    # print("stat", stats)
                 if 'websocketscmd' in self.app:
                     if self.app['websocketscmd']:
                         if 'manager' in self.app:
                             res = self.app['manager'].getSreamsStatus()
-                            #print("res", len(res), res)
-                            if any(res):
-                                #print("res 2")
-                                res = {"camsList": res}
-                                try:
-                                    for ws in self.app['websocketscmd']:
-                                        await ws.send_json(res)
-                                except:
-                                    print("Unexpected error:", sys.exc_info()[0])
+                            res = {"camsList": res}
+                            try:
+                                for ws in self.app['websocketscmd']:
+                                    await ws.send_json(res)
+                            except:
+                                print("Unexpected error:", sys.exc_info()[0])
+                            await self.send_streams()
             except:
                 print('server loop Errror')
                 print(sys.exc_info())

@@ -9,7 +9,6 @@ import yaml
 import numpy as np
 import cv2
 import asyncio
-import aiosqlite
 from requests_futures import sessions
 import tensorflow as tf
 
@@ -52,7 +51,8 @@ class VideoCaptureStream:
         self.cap.release()
 
 class VideoCapture:
-    def __init__(self, camConfig, gpuConfig, device_id, cam_id, log, client=None, vc_device="/CPU:0"):
+    def __init__(self, camConfig, gpuConfig, device_id, cam_id, log, vc_device="/CPU:0"):
+        threading.Thread.__init__(self)
         self.log = log      
         self.log.debug("VideoCapture start init stream object " + str(cam_id))
         self.totalFrames = 0
@@ -66,8 +66,7 @@ class VideoCapture:
         self.outFrame = np.array([])
         self.isDrow = False
         self.clients = []
-        self.db_path = "db.wingu.sqlite3"
-        self.db_table_name = "intersetions"
+        self.intersections = []
         self.save_video_res = None
         self.id = str(cam_id)
         self.device_id = device_id        
@@ -120,34 +119,16 @@ class VideoCapture:
             else:
                 print("VideoCapture encoder is None")
                 return None
+            self.session.get(self.server_URL+'cmd=startStream&name='+self.id+'&status=OK')
         except:
+            self.session.get(self.server_URL+'cmd=startStream&name='+self.id+'&status=error')
             self.log.debug("VideoStream Can not start Video Stream for " + camConfig)            
             print("VideoStream err types",type(traceback.print_exception(*sys.exc_info())), type(sys.exc_info())) 
             print("VideoStream err:", sys.exc_info())
             self.id = None
 
-    async def ws_send_data(self, cmd):
-        try:
-            await self.session.get(self.server_URL+'cmd='+cmd)
-            #future.result()
-            #print("ok")
-        except:
-             pass
-
-    #async def ws_send_data(self):
-    #    try:
-    #        data = self.outFrame.tobytes()
-    #        print("VideoStream data=", len(data))
-    #        for client in self.clients:
-    #            try:
-    #                await client.send_bytes(data)
-    #            except:
-    #                print("VideoStream ws_send_data client error")
-    #                print(sys.exc_info())
-    #                await client.send_json({"error":["VideoStream","can not send data"]})
-    #    except:
-    #        print("VideoStream ws_send_data error in except")
-    #        print(sys.exc_info())
+    def writeVideo(self):
+       self.out.write(self.outFrame)
 
     def get_status(self):
         status = {}
@@ -164,44 +145,13 @@ class VideoCapture:
         except: print(sys.exc_info())
         return status
 
-    def stopGetStream(self, client):
-          self.clients = []
-          self.display_video_flag = False
+    def get_cur_stat(self):
+        res = np.array(self.intersections)
+        self.intersections = []
+        return res 
 
-    async def startGetStream(self, client):
-        print("VideoCapture start stream video")
-        if client not in self.clients:
-            self.clients.append(client)
-            self.display_video_flag = True
-            print("len of clients: ", len(self.clients) )
-            try:
-                await client.send_json({'OK':["startGetStream", self.id]})
-            except:
-                print("VideoCapture exception in startGet Stream")
-                await client.send_json({"error":["startGetStream", self.id, "exception on VideoCapture"]})
-        else:
-            await client.send_json({"error":["startGetStream", self.id, "one more times"]})            
-
-    def send_cur_frame(self):
+    def get_cur_frame(self):
         return self.outFrame   
-
-    async def save_statistic(self, borders_arr):
-        # print("VideoCapture start save stat in stream")
-        try:
-            for borders in borders_arr:
-                for item in borders.keys():
-                    sql = f'INSERT INTO {self.db_table_name}(border, stream_id, in_out, time) VALUES("{item}", "{self.id}", {int(borders[item])}, {int(time.time())})'
-                    # print("sql borders", sql)
-                    async with aiosqlite.connect(self.db_path) as db:
-                        await db.execute(sql)
-                        await db.commit()
-        except:
-            self.log.debug("VideoCapture Error save data")
-            print(sys.exc_info())
-
-    # read frames as soon as they are available, keeping only most recent one
-    # 0. CV_CAP_PROP_POS_MSEC Current position of the video file in milliseconds.
-    # 1. CV_CAP_PROP_POS_FRAMES 0-based index of the frame to be decoded/captured next.
 
     def read(self):
         start = time.time()
@@ -236,7 +186,6 @@ class VideoCapture:
     def ccw(self,A,B,C):
         return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
     
-
     # Return true if line segments AB and CD intersect
     def track_intersection_angle(self,A,B):   
         res = {}
@@ -252,9 +201,6 @@ class VideoCapture:
                 else:
                     res[key] = 0
         return res
-
-    # def add_intersectio_event(self, border_names, id):
-    #     self.log.debug(border_names, id)
 
     def drawBorderLines(self, frame):
         for b in self.borders:
@@ -272,11 +218,10 @@ class VideoCapture:
             cv2.putText(frame, "Out", z1, 0, 1, (0, 255, 0), 1)
         return frame
 
-    async def track(self, box, score, cl, frame):
+    def track(self, box, score, cl, frame):
         try:  
             start = time.time()
             res = []
-            #self.log.debug("Track Cam "+str(self.id)+"  frame="+ str(self.proceed_frames_cnt))
             boxs = []
             confs = []
             for i in range(len(box)): 
@@ -285,13 +230,11 @@ class VideoCapture:
                      boxs.append((np.array(box[i])*self.img_size))
                      confs.append(score[i])
             if(len(boxs)):
-                #self.log.debug("track boxs "+ str(len(boxs)))
                 with tf.device(self.vc_device):
                     features = self.encoder(frame, boxs)
                 detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
                 self.tracker.predict()
                 self.tracker.update(detections)
-                # self.log.debug("videoCapture traks "+ str(len(self.tracker.tracks)))
                 for track in self.tracker.tracks:
                     if(not track.is_confirmed() or track.time_since_update > 1):
                         # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
@@ -299,7 +242,6 @@ class VideoCapture:
                     xy = track.mean[:2].astype(np.int)# tuple(())
                     clr = (255, 255, 0) # default color
                     track_name = str(track.track_id) # default name
-                    # self.log.debug("track "+ track_name)
                     if(hasattr(track, 'xy')):
                         lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
                         if lst_intrsc.keys():
@@ -307,6 +249,7 @@ class VideoCapture:
                             if(not hasattr(track, 'calculated')):
                                 #cnt_people_in[track.track_id] = 0
                                 track.calculated = "in_"
+                                self.intersections.append(lst_intrsc)
                                 track.color = (52, 235, 240)
                                 self.log.debug("intersection!! "+ self.id)
                                 res.append(lst_intrsc)
@@ -319,43 +262,20 @@ class VideoCapture:
                         track.xy.append(xy)
                         if len(track.xy) > self.path_track:
                             track.xy = track.xy[-self.path_track:]
-                        # print("[track.xy]", [track.xy])
                         # cv2.polylines(frame_sm, [np.array(track.xy)], False, clr, 3)
                     else: 
                         track.xy = [xy]
                     if(self.isDrow):    
                         txy =  tuple(xy)
                         cv2.circle(frame, txy, 5, clr, -1)
-                        # cv2.rectangle(frame_sm, (int(bbox[1]), int(bbox[0])), (int(bbox[3]), int(bbox[2])), clr, 1)
-                        # cv2.putText(frame, str(track.track_id),(int(bbox[1]), int(bbox[0])),0, 5e-3 * 200, (0,255,0),2)
                         cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
-            # self.log.debug("--" + str(self.display_video_flag))
+            self.drawBorderLines(frame)
+            cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, (255, 255, 0), 1)
+            frame = cv2.resize(frame,self.save_video_res)
+            self.outFrame = np.copy(frame)
+            # print('self.outFrame', self.outFrame)
             if self.save_video_flag:
-                self.drawBorderLines(frame)
-                cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, (255, 255, 0), 1)
-                # cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
-                frame = cv2.resize(frame,self.save_video_res)
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                self.out.write(frame)
-            if res:
-                 await self.save_statistic(res)
-            if self.clients:
-                # self.log.debug("save")
-                if(not self.save_video_flag):
-                    frame = self.drawBorderLines(frame)
-                    cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, (255, 255, 0), 1)
-                    # cv2.putText(frame, "People in: "+str(len(self.cnt_people_in)), (10, 360), 0, 0.4, (52, 235, 240), 1)
-                    #print(self.save_video_res)
-                    frame = cv2.resize(frame, self.save_video_res)
-                    # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                ret2, frame_jpg = cv2.imencode(".jpg", frame)
-                if(ret2):
-                    self.outFrame = np.copy(frame_jpg)
-                    print("self.outFrame=", len(self.outFrame))
-                    # self.outFrame = iWeb.tobytes()
-                    #with open("video/dd__00_1.jpg",'wb') as f:
-                    #    f.write(res)
-                    await self.ws_send_data("frame")
+                self.writeVideo()
             self.proceedTime[1] = time.time() - start
         except:
             print(sys.exc_info())
@@ -364,11 +284,12 @@ class VideoCapture:
         try:
             self._stopevent.set()
             self.isRun = False 
-            self.session.get(self.server_URL+'cmd=stopStream&name='+self.id)
+            self.session.get(self.server_URL+'cmd=stopStream&name='+self.id+'&status=OK&module=stream')
             if self.save_video_flag: self.out.release()
             if(self.cap):
                 if(self.cap.isOpened()): self.cap.release()
         except:
+            self.session.get(self.server_URL+'cmd=stopStream&name='+self.id+'&status=error&module=stream')
             self.log.error("Unexpected error while Cam stopping")
             print(sys.exc_info()[0]) 
         self.log.info("videoCapture exit done")

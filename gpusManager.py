@@ -10,7 +10,6 @@ import yaml
 import cv2
 # import nvidia_smi
 #import psutil
-import aiosqlite
 from requests_futures import sessions
 
 import gpuDevice
@@ -20,23 +19,25 @@ import gpuDevice
 
 class Manager(threading.Thread):
     def __init__(self, configFileName):
+        threading.Thread.__init__(self)
         self.gpusActiveList = {}  # running devices
         self.gpusList = {} # available devices
         self.gpusConfigList = {} #  devices configs
         self.streamsConfigList = {}
         self.camsList = {} # running streams on gpus
-        self.log = logging.getLogger('app')
-        self.log.setLevel(logging.DEBUG)
         f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        ch.setFormatter(f)
-        self.log.addHandler(ch)
+        # Add file rotating handler, with level DEBUG
+        fileLog = logging.handlers.RotatingFileHandler('manager.log', 'a', 100000, 5)
+        fileLog.setLevel(logging.DEBUG)
+        fileLog.setFormatter(f)
+        logging.getLogger().addHandler(fileLog)
+
+        self.log = logging.getLogger('appManager')
         self._stopevent = threading.Event()
         self.isGPU = False
         self.server_URL = "http://localhost:8080/update?"
         self.session = sessions.FuturesSession(max_workers=2)
-        self.camIdFrame = []
+        # self.camIdFrame = []
         self.isGpuStarted = False
         try:
             self.config = self.loadConfig(configFileName, 'Gpus_manager_')
@@ -86,16 +87,56 @@ class Manager(threading.Thread):
                     cfg = self.loadConfig(stream, "Stream_")
                     if cfg != None:
                         self.streamsConfigList[stream] = cfg
+                        if stream in self.config['autotart_streams']:
+                            self.startStream(stream)
                 self.ready = True
-                threading.Thread.__init__(self)
-                self.session.get(self.server_URL+"cmd=startManager")
-                self.start()
+                try:
+                    self.log.debug("GPUsmanager try to autostart "+ stream)
+                    time.sleep(3)
+                except:
+                    self.log.debug("GPUsmanager exception autostart "+ stream)
+
+                self.session.get(self.server_URL+"cmd=startManager&status=OK&name=Init&module=Manager")
+                # self.start()
             else:
                 self.log.error("GPUsmanager Can not load config gor GPUs Maanger")
         except:
             self.log.error("GPUsmanager Can not start gpus manager")
             print(sys.exc_info())
             self.kill()            
+
+
+    def getCamsStat(self):
+        res = []
+        if self.camsList:
+            for cam_id in list(self.camsList):
+                try:
+                    res.append(self.getCamStat(cam_id))
+                except:
+                    print("GpusManager error get cam stat")
+        return res
+
+    def getCamStat(self, cam_id):
+            res = []
+            try:
+                gpu_id = self.camsList[cam_id]
+                res = self.gpusActiveList[gpu_id].cams[cam_id].get_cur_stat()
+            except:
+                print("GpusManager err gat Cam stat")
+            return res
+
+    def getCamFrame(self, cam_id):
+        res = None
+        try:
+            if cam_id in self.camsList:
+                gpu_id = self.camsList[cam_id]
+                if gpu_id in self.gpusActiveList:
+                    if cam_id in self.gpusActiveList[gpu_id].cams:
+                        res = self.gpusActiveList[gpu_id].cams[cam_id].get_cur_frame() 
+        except:
+            print("GpusManager getCamFrame exception")
+            print(sys.exc_info())
+        return res
 
     async def addConfig(self, name, type, cfg, client=None):
         print("GPUsmanager start addConfig", name, type, cfg)
@@ -109,30 +150,15 @@ class Manager(threading.Thread):
                 #self.getStreamsConfig(self, client)
                 self.session.get(self.server_URL+"cmd=configUpdated&type=" + type)                
 
-    def run(self):
-        # print("GPUsmanager start running!")
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(self._run())
-        loop.close()
-
-    async def _run(self):
-        if self.config['autotart_streams'] is not None:
-            for stream in self.config['autotart_streams']:
-                try:
-                    self.log.debug("GPUsmanager try to autostart "+ stream)
-                    await self.startStream(stream)
-                    time.sleep(3)
-                except:
-                    self.log.debug("GPUsmanager exception autostart "+ stream)
-
-        while not self._stopevent.isSet():
-            try:
-                print("GPUsmanager tik ", len(self.gpusActiveList))
-                # print("data=", type, id, data)
-                #await self.getHardwareStatus()
-                await asyncio.sleep(3)
-            except:
-                self.log.debug("GPUsmanager run stoped by exception")
+    #async def _run(self):
+    #    while not self._stopevent.isSet():
+    #        try:
+    #            print("GPUsmanager tik ", len(self.gpusActiveList))
+    #            # print("data=", type, id, data)
+    #            #await self.getHardwareStatus()
+    #            await asyncio.sleep(3)
+    #        except:
+    #            self.log.debug("GPUsmanager run stoped by exception")
 
 
     def updateConfig(self, cfg):
@@ -167,13 +193,13 @@ class Manager(threading.Thread):
                 self.log.error("GPUsmanager Can not load config for " + fileName )
         return res
 
-    def getFrame(self):
-        res = None
-        try:
-            print("camIdFrame", self.camIdFrame)
-            res = self.gpusActiveList[self.camIdFrame[0]].cams[self.camIdFrame[1]].send_cur_frame()             
-        except: print(sys.exc_info())
-        return res
+    #def getFrame(self):
+    #    res = None
+    #    try:
+    #        print("camIdFrame", self.camIdFrame)
+    #        res = self.gpusActiveList[self.camIdFrame[0]].cams[self.camIdFrame[1]].send_cur_frame()             
+    #    except: print(sys.exc_info())
+    #    return res
 
     async def getStreamsConfig(self, client):
         try:
@@ -184,14 +210,20 @@ class Manager(threading.Thread):
             print("GPUsmanager send status error")
             print(sys.exc_info())
 
-    async def startStream(self, configName, client=None, device=None):
+    def send_data(self, data):
+        try:
+            self.session.get(self.server_URL+data)            
+        except:
+            print("GpusMaanger error send data")
+
+    def startStream(self, configName, device=None):
         self.log.info("GPUsmanager Start stream "+str(configName)+" on device "+str(device))
         try:
             if configName in self.streamsConfigList:
                 config = self.streamsConfigList[configName]
                 if device:
                     if device in self.getActiveGpusList():
-                        self.gpusActiveList[device].startCam(config, configName, device, client)
+                        self.gpusActiveList[device].startCam(config, configName, device)
                         self.camsList[configName] = device
                         self.log.debug("cam add to camsList "+ str(device)+" "+configName)
                         print("cam add to camsList ", self.camsList)
@@ -205,7 +237,7 @@ class Manager(threading.Thread):
                     if devices_cnt >= devices_cnt_act:
                         if devices_cnt == 1:
                             if devices_cnt_act == 1:
-                                self.gpusActiveList[act_ids[0]].startCam(config, configName, 0, client)
+                                self.gpusActiveList[act_ids[0]].startCam(config, configName, 0)
                                 self.camsList[configName] = act_ids[0]
                                 self.log.debug("cam add to camsList "+ str(act_ids[0])+" "+configName)
                                 print("cam add to camsList ", self.camsList)
@@ -219,50 +251,54 @@ class Manager(threading.Thread):
                             # add GPUs balanser
                             #self.startGpu(self.gpusList)
                             #time.sleep(5)
-                            self.gpusActiveList[act_ids[0]].startCam(config, configName, 0, client)
+                            self.gpusActiveList[act_ids[0]].startCam(config, configName, 0)
                             self.camsList[configName] = act_ids[0]
                     else:
                         self.log.debug("GPUsmanager Active gpus list is more then ")
             else:
                 self.log.debug("GPUsmanager any config for " + configName)
         except:
+            print(sys.exc_info())
             self.log.debug("GPUsmanager Can not start stream!")
-            if client is not None:
-                await client.send_json({"error":["startStream", configName, "exception on GPUsmanager"]})
+            self.send_data("cmd=startStream&name=" + cam_id + "&status=error&module=Manager")
 
     def stopStream(self, cam_id):
         try:
             if cam_id in self.camsList:
                 print("GPUsmanager stop stream ", cam_id, self.camsList[cam_id])
                 if self.camsList[cam_id] in self.getActiveGpusList():
-                    print("GPUsmanager stop stream ", cam_id,  self.camsList[cam_id])
-                    answer = self.gpusActiveList[self.camsList[cam_id]].stopCam(cam_id)
+                    print("GPUsmanager stop stream 2", cam_id,  self.camsList[cam_id])
+                    self.gpusActiveList[self.camsList[cam_id]].stopCam(cam_id)
                     del self.camsList[cam_id]
         except: 
             print(sys.exc_info())
+            self.send_data("cmd=stopStream&name=" + cam_id + "&status=error&module=Manager")
 
-    async def stopGetStream(self, client, cam_id):
-        try:
-            res = self.gpusActiveList[self.camIdFrame[0]].cams[self.camIdFrame[1]].stopGetStream(client)
-            camIdFrame = []
-            await client.send_json({"OK":["stopGetStream", cam_id]})
-        except: 
-            print(sys.exc_info())
-            await client.send_json({"error":["stopGetStream", cam_id, "exception on GPUsmanager"]})
 
-    async def startGetStream(self, client, cam_id):
-        self.log.debug("GPUsmanager start get stream " + cam_id)
-        if cam_id in self.camsList:
-            try:
-                gpu_id = self.camsList[cam_id]
-                if gpu_id in self.getActiveGpusList():
-                   print("check gpu 3", cam_id, gpu_id)
-                   await self.gpusActiveList[gpu_id].cams[cam_id].startGetStream(client)
-                   self.camIdFrame = [gpu_id, cam_id]
-            except:
-                print(sys.exc_info())
-                self.log.debug("GPUsmanager startGetStream exception!")
-                await client.send_json({"error":["startGetStream", cam_id, "exception on GPUsmanager"]})
+    #def stopGetStream(self, cam_id, client=None):
+    #    try:
+    #        self.gpusActiveList[self.camIdFrame[0]].cams[self.camIdFrame[1]].stopGetStream(client)
+    #        camIdFrame = []
+    #        # await client.send_json({"OK":["stopGetStream", cam_id]})
+    #    except: 
+    #        print(sys.exc_info())
+    #        if client is not None:
+    #            self.send_data(client, {"error":["stopGetStream", cam_id, "exception on GPUsmanager"]})
+
+    #def startGetStream(self, cam_id, client):
+    #    self.log.debug("GPUsmanager start get stream " + cam_id)
+    #    if cam_id in self.camsList:
+    #        try:
+    #            gpu_id = self.camsList[cam_id]
+    #            if gpu_id in self.getActiveGpusList():
+    #               print("check gpu 3", cam_id, gpu_id)
+    #               self.gpusActiveList[gpu_id].cams[cam_id].startGetStream(client)
+    #               self.camIdFrame = [gpu_id, cam_id]
+    #        except:
+    #            print(sys.exc_info())
+    #            self.log.debug("GPUsmanager startGetStream exception!")
+    #            if client is not None:
+    #                await client.send_json({"error":["startGetStream", cam_id, "exception on GPUsmanager"]})
 
     def getSreamsStatus(self):
         res = self.getCamsStatus()
@@ -391,7 +427,7 @@ class Manager(threading.Thread):
                 self.gpusActiveList[id].kill()
             except:
                 self.log.debug('GPUsmanager Erorr stop gpu: '+ str(id))
-        time.sleep(10)
+        time.sleep(4)
         for id in list(self.gpusActiveList):
             try:
                 ready = self.gpusActiveList[id].id
