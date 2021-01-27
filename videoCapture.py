@@ -96,8 +96,8 @@ class VideoCapture:
             self.borders = self.config['borders']
             self.out = None
             if self.save_video_flag:            
-                outFile = self.config['save_path']
-                if outFile == '': outFile =  'video/'+str(self.id)+"_auto.avi"
+                outFile = self.config['save_path'] +"_"+ str(self.startTime)+".avi"
+                if outFile == '': outFile =  'video/'+str(self.id)+"_"+ str(self.startTime)+"_auto.avi"
                 self.log.debug("Save out video to file " + outFile)
                 self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
             print("VideoCapture stream start load encoder")
