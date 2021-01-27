@@ -107,11 +107,13 @@ class Manager(threading.Thread):
 
 
     def getCamsStat(self):
-        res = []
+        res = {}
         if self.camsList:
             for cam_id in list(self.camsList):
                 try:
-                    res.append(self.getCamStat(cam_id))
+                     data = self.getCamStat(cam_id)
+                     if data.any():
+                        res[cam_id] = data
                 except:
                     print("GpusManager error get cam stat")
         return res

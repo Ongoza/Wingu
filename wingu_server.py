@@ -1,26 +1,20 @@
 ﻿#TODO
 # сервер запускает менеджер ресурсов (GPUs and CPU)
 # менеджер ресурсов запускает менеджер потоков на которых уже крутятяся разные видеостримы
-#! /usr/bin/env python
+import io, os, sys
+import numpy as np
 import asyncio
-# import aiohttp_debugtoolbar
 from aiohttp_session import session_middleware
 # from aiohttp_session.cookie_storage import EncryptedCookieStorage
-import numpy as np
 from aiohttp import web, WSMsgType
 from typing import Any, AsyncIterator, Awaitable, Callable, Dict
-import aiosqlite
 from pathlib import Path
-# from routes import routes
 from middlewares import authorize
-# from motor import motor_asyncio as ma
-# import asyncio
-import io, sys
 import sqlite3
+import aiosqlite
 from shutil import copyfile
 import cv2 
 import json
-import os
 import settings
 import hashlib
 import ssl
@@ -31,7 +25,6 @@ import yaml
 import time
 import weakref
 
-#import camera
 import gpusManager
 
 camerasListData = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
@@ -47,94 +40,32 @@ test_streams_config =  {'streamsConfigList':
                         }
 
 counter = 0
-
+stats_data = [
+    [1, "border1", "file_39", 1, 1611752111], 
+    [2, "border1", "file_39", 0, 1611752159], 
+    [3, "border1", "file_39", 1, 1611752259], 
+    [4, "border1", "file_39", 1, 1611752260],
+    [5, "border1", "file_39", 0, 1611752273], 
+    [6, "border1", "file_39", 1, 1611752351], 
+    [7, "border1", "file_39", 0, 1611752398], 
+    [8, "border1", "file_39", 1, 1611752495], 
+    [9, "border1", "file_39", 1, 1611752497], 
+    [10, "border1", "file_39", 0, 1611752509], 
+    [11, "border1", "file_39", 1, 1611752547], 
+    [12, "border1", "file_39", 1, 1611752573], 
+    [13, "border1", "file_39", 1, 1611752585], 
+    [14, "border1", "file_39", 1, 1611752630], 
+    [15, "border1", "file_39", 0, 1611752669], 
+    [16, "border1", "file_39", 0, 1611752682], 
+    [17, "border1", "file_39", 1, 1611752688], 
+    [18, "border1", "file_39", 0, 1611752809], 
+    [19, "border1", "file_39", 1, 1611752923], 
+    [20, "border1", "file_39", 0, 1611752936]
+    ]
 ############################################################
-def get_db_path():
-    return "db.wingu.sqlite3"
-
-def init_db():
-    try:
-        sqlite_db = get_db_path()
-        if os.path.isfile(sqlite_db):
-            print("DB exist ", counter)
-            return
-        conn = sqlite3.connect(sqlite_db)
-        c = conn.cursor()
-        c.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
-        c.execute('CREATE TABLE stats (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, time INTEGER)')
-        c.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, in_out INTEGER, time INTEGER)')
-        #c.execute("INSERT INTO stocks VALUES ('2006-01-05','BUY','RHAT',100,35.14)")
-        conn.commit()
-        conn.close()
-        print("DB is ok ", counter)
-    except:
-        print("db is not ok")
-
-async def save_statistic(type_data, id, data):
-    t = int(time.time())
-    print("data=", type_data, id, data, t)
-    sqlite_db = get_db_path()
-    try:
-        for item in data:
-            sql = f'INSERT INTO {type_data}(border, stream_id, time) VALUES("{item}", "{id}", {int(time.time())})'
-            print("sql", sql)
-            async with aiosqlite.connect(sqlite_db) as db:
-                await db.execute(sql)
-                await db.commit()
-
-        async with aiosqlite.connect(sqlite_db) as db:
-            async with db.execute('SELECT * FROM intersetions') as cursor:
-                rows = await cursor.fetchall()
-                print(rows)
-            # await db.execute("SELECT COUNT(*) FROM intersetions");
-    except:
-        print("save data")
-        print(sys.exc_info())
-
-            #async def save_statistic(self, borders_arr):
-    #    # print("VideoCapture start save stat in stream")
-    #    try:
-    #        for borders in borders_arr:
-    #            for item in borders.keys():
-    #                sql = f'INSERT INTO {self.db_table_name}(border, stream_id, in_out, time) VALUES("{item}", "{self.id}", {int(borders[item])}, {int(time.time())})'
-    #                # print("sql borders", sql)
-    #                async with aiosqlite.connect(self.db_path) as db:
-    #                    await db.execute(sql)
-    #                    await db.commit()
-    #    except:
-    #        self.log.debug("VideoCapture Error save data")
-    #        print(sys.exc_info())
-
-    # read frames as soon as they are available, keeping only most recent one
-    # 0. CV_CAP_PROP_POS_MSEC Current position of the video file in milliseconds.
-    # 1. CV_CAP_PROP_POS_FRAMES 0-based index of the frame to be decoded/captured next.
-
-async def ws_send_data(client, data, binary=False):
-    try:
-        print("data=", len(data), client)
-        if binary:
-            await client.send_bytes(data)
-        else:
-            await client.send_json(data)
-        return True
-    except:
-        print("ws_send_data error")
-        print(sys.exc_info())
-        try:
-            await client.send_json({"error":["can not send data"]})
-        except:
-            print("ws_send_data error in except")
-
-
-
-        # await ws.send_json({"error":['saveConfig', config['tp'], config['name']]})
 
 class Server:
     def __init__(self):
-        init_db()
-        self.managerConfigFile = "default"
-        self.stop = 5
-
         #logging.getLogger().setLevel(logging.NOTSET)
         logging.getLogger().setLevel(logging.DEBUG)
         f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
@@ -151,6 +82,12 @@ class Server:
         logging.getLogger().addHandler(fileLog)
 
         self.log = logging.getLogger('app')
+
+        self.managerConfigFile = "default"
+        
+        self.db_path = "db.wingu.sqlite3"
+        self.init_db()
+
         self.live_streams = {}
 
         self.routes = [
@@ -160,7 +97,7 @@ class Server:
                 #('GET', '/testImg',  self.testImg),
                 # ('*',   '/login',   Login,     'login'),
                 # ('POST', '/sign/{action}',  Sign,    'sign'),
-                #('GET',  '/camerasList', camerasList),
+                ('GET',  '/stats', self.getStats),
                 ('GET',  '/getFileImg', self.getFileImg),
                 #('GET',  '/filesList', self.getFilesList),
                 ('GET',  '/update', self.update),
@@ -445,6 +382,75 @@ class Server:
             print("websocket is not available for stream")
             self.removeLiveStream(ws, stream)
 
+            #conn = sqlite3.connect(self.db_path)
+            #c = conn.cursor()
+            #c.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
+            #c.execute('CREATE TABLE stats (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, time INTEGER)')
+            #c.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, in_out INTEGER, time INTEGER)')
+            #conn.commit()
+            #conn.close()
+
+    def init_db(self):
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.a_init_db())
+        loop.close()
+
+    async def a_init_db(self):
+        try:
+            if os.path.isfile(self.db_path):
+                print("DB exist")
+                return
+            async with aiosqlite.connect(self.db_path) as db:
+                 await db.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
+                 await db.execute('CREATE TABLE stats (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, time INTEGER)')
+                 await db.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, in_out INTEGER, time INTEGER)')
+                 await db.commit()
+            print("DB created!")
+        except:
+            print("db is not ok")
+
+
+    async def save_statistic(self, cams):
+        cur_time = int(time.time())
+        # save stats cur time= 1611751629 {'file_39': array([{'border1': 1}], dtype=object)}
+        try:
+            for i, (cam_id, data) in enumerate(cams.items()):
+                for items in data:
+                    for item in items:
+                        sql = f'INSERT INTO intersetions (border, stream_id, in_out, time) VALUES("{item}", "{cam_id}", {items[item]}, {cur_time})'
+                        print("sql", sql)
+                        async with aiosqlite.connect(self.db_path) as db:
+                            await db.execute(sql)
+                            await db.commit()
+                            print("save data ok")
+        except:
+            print("error save data", cams)
+            print(sys.exc_info())
+
+    async def getStats(self, request):
+        print("request getStats")
+        try:
+            # request = {'time_start':1611751629}  params
+            params = request.rel_url.query
+            # print("Server get stats", params)
+            sql = 'SELECT * FROM intersetions where time >= ' 
+            if params:
+                if 'time_start' in params: time_start = str(params['time_start'])
+                else: time_start = 1611751629
+                sql += str(time_start)
+                if 'time_end' in params: sql += ' AND time < ' + str(params['time_end'])
+                if 'cam_id' in params: sql += ' AND cam_id = ' + str(params['cam_id'])
+                if 'in_out' in params: sql += ' AND in_out = ' + str(params['in_out'])
+            else: sql += str(1611751620)
+            # print('sql=', sql)
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(sql) as cursor:
+                    rows = await cursor.fetchall()
+                    res = json.dumps({'getStats':rows})
+            return web.json_response(res)
+        except:
+            return web.json_response({"error":["getStats"]})
+
         #  background task 
     async def background_process(self):
         #await self.try_make_db()
@@ -455,8 +461,14 @@ class Server:
                 #await save_statistic("intersetions", "file_0", ["border_a","border_b"])
                 # print("server tik")
                 if 'manager' in self.app:
-                    stats = self.app['manager'].getCamsStat()
-                    # print("stat", stats)
+                    try:
+                        stats = self.app['manager'].getCamsStat()
+                        print("stats", stats)
+                        if stats:
+                            await self.save_statistic(stats)
+                    except:
+                        print("error save stats")
+                        print(sys.exc_info())
                 if 'websocketscmd' in self.app:
                     if self.app['websocketscmd']:
                         if 'manager' in self.app:
