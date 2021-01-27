@@ -112,11 +112,22 @@ class Manager(threading.Thread):
             for cam_id in list(self.camsList):
                 try:
                      data = self.getCamStat(cam_id)
-                     if data.any():
+                     if data:
                         res[cam_id] = data
                 except:
-                    print("GpusManager error get cam stat")
+                    print("GpusManager error get cam stats")
+                    print(sys.exc_info())
         return res
+
+    def removeCam(self, cam_id):
+        try:
+            if cam_id in self.camsList:
+                gpu_id = self.camsList[cam_id]
+                del self.camsList[cam_id]
+                self.gpusActiveList[gpu_id].removeCam(cam_id)
+        except:
+            print("GpusManager error get remove cam")
+            print(sys.exc_info())
 
     def getCamStat(self, cam_id):
             res = []
@@ -124,7 +135,9 @@ class Manager(threading.Thread):
                 gpu_id = self.camsList[cam_id]
                 res = self.gpusActiveList[gpu_id].cams[cam_id].get_cur_stat()
             except:
-                print("GpusManager err gat Cam stat")
+                print("GpusManager err get Cam stat")
+                print(sys.exc_info())
+
             return res
 
     def getCamFrame(self, cam_id):

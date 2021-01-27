@@ -67,19 +67,11 @@ class GpuDevice(threading.Thread):
         if(len(self.cams)==0):
             time.sleep(0.5)
             self.kill()
-    
-    #def drawBorderLine(self, a, b):
-    #    length = 40
-    #    vX0 = b[0] - a[0]; vY0 = b[1] - a[1]
-    #    mag = math.sqrt(vX0*vX0 + vY0*vY0)
-    #    vX = vX0 / mag; vY = vY0 / mag
-    #    temp = vX; vX = -vY; vY = temp
-    #    z0 = (int(a[0]+vX0/2), int(a[1]+vY0/2))
-    #    z1 = (int(a[0]+vX0/2 - vX * length), int(a[1] +vY0/2- vY * length))
-    #    cv2.line(frame, a, b, (255, 255, 0), 2)
-    #    cv2.arrowedLine(frame, z0, z1, (0, 255, 0), 2)
-    #    cv2.putText(frame, "Out", z1, 0, 1, (0, 255, 0), 1)
 
+    def removeCam(self, cam_id):
+        if cam_id in self.cams:
+            del self.cams[cam_id]
+    
     def kill(self):
         self.log.debug("kill cameras "+ str(len(self.cams)))
         self._stopevent.set()

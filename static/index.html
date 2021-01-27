@@ -1,4 +1,4 @@
-<html>
+﻿<html>
 <head>
     <meta charset="UTF-8">
     <title>"Wingu:Home"</title>
@@ -30,17 +30,17 @@
             let out_users = 0;
             for (var i in rows) {
                 data = rows[i]
-                let name = data['id'];
+                let name = data[0];
                 let inOut = "In";
-                if (data['InOut'] == 1) { inOut = "Out"; in_users++; }
+                if (data[3] == 1) { inOut = "Out"; in_users++; }
                 else { out_users++; }
                 table
                     .append($('<tr>').attr('id', "stat_" + name)
                         .append($('<td>').append(count + 1).attr('id', "stat_num_" + (count + 1).toString()))
-                        .append($('<td>').append(data['name']).attr('id', "stat_name_" + name))
-                        .append($('<td>').append(data['border']).attr('id', "stat_border_" + name))
+                        .append($('<td>').append(data[1]).attr('id', "stat_name_" + name))
+                        .append($('<td>').append(data[2]).attr('id', "stat_border_" + name))
                         .append($('<td>').append(inOut).attr('id', "stat_inOut_" + name))
-                        .append($('<td>').append(moment.unix(data['time']).format()).attr('id', "stat_time_" + name))
+                        .append($('<td>').append(moment.unix(data[4]).format()).attr('id', "stat_time_" + name))
                     );
             }
             console.log("in_users", in_users, out_users);
@@ -57,38 +57,62 @@
             });
         });
 
+        function getServerSata() {
+
+        }
+
+        function getStats(params) {
+            // data = stats_data;
+            let statsAPI = '../stats'+params;
+            $.getJSON(statsAPI, {format: "json"}).done(function (ans) {
+                let json = JSON.parse(ans);
+                console.log("data 1", typeof json);
+                $('#spinner').remove();
+                if (json.hasOwnProperty('getStats')) {
+                    let count = 0;
+                    let in_users = 0;
+                    let out_users = 0;
+                    let data = json['getStats']
+                    let t = $('#tableStat').DataTable({
+                        select: true,
+                        columnDefs: [{
+                            targets: [0],
+                            orderData: [0, 1]
+                        }, {
+                            targets: [1],
+                            orderData: [1, 0]
+                        }, {
+                            targets: [4],
+                            orderData: [4, 0]
+                        }]
+                    });
+                    // addRowsStat(data);
+                    $.each(data, function (i, item) {
+                        item[0] = i+1;
+                        if (item[3] == 0) { item[3] = 'In', in_users++; }
+                        else { item[3] = 'Out', out_users++;  };
+                        item[4] = moment.unix(item[4]).format();
+                        t.row.add(item).draw(true);
+                    });
+                    console.log("data ready");
+                    $('#in_users').text(in_users);
+                    $('#out_users').text(out_users);
+                }
+            }).fail(function () {
+                $('#spinner').remove();                
+                $('#alertInfo').html('<div class="alert alert-danger" role="alert">Error load data from server!</div>');
+                console.log("error get json");
+            })
+                ;
+        }
 
         $(document).ready(function () {
-            let data = {
-                "users": [
-                    { 'id': 'Cherk_left', 'name': 'Chercasy left', 'border': 'Border_0', 'InOut': 0, 'time': 1611594690 },
-                    { 'id': 'Cherk_left', 'name': 'Chercasy left', 'border': 'Border_0', 'InOut': 0, 'time': 1611594691 },
-                    { 'id': 'Cherk_left', 'name': 'Chercasy left', 'border': 'Border_0', 'InOut': 1, 'time': 1611594692 },
-                    { 'id': 'Cherk_left', 'name': 'Chercasy left', 'border': 'Border_0', 'InOut': 0, 'time': 1611594693 },
-                    { 'id': 'Cherk_right', 'name': 'Chercasy right', 'border': 'Border_0', 'InOut': 1, 'time': 1611594694 },
-                ]
-            };
-            addRowsStat(data['users']);
-            //$('#periodpickerstart').periodpicker({
-            //    end: '#periodpickerend'
-            //});
-
-
-            $('#tableStat').DataTable({
-                select: true,
-                columnDefs: [{
-                    targets: [0],
-                    orderData: [0, 1]
-                }, {
-                    targets: [1],
-                    orderData: [1, 0]
-                }, {
-                    targets: [4],
-                    orderData: [4, 0]
-                }]
-            });
+            // 24 hours = 86400 sec
+            let startTime = Math.floor(Date.now() / 1000) - 3600;
+            console.log("startTime", startTime, moment.unix(startTime).format())
+            getStats('?time_start=' + startTime.toString());
+            //value = "01/01/2018 - 01/15/2018";
         });
-
     </script>
 
 </head>
@@ -100,9 +124,34 @@
         <div class="card-header">Request to Database for data</div>
         <div class="card-body">
             <div id="dbRequest">
-                <input type="text" name="datetimes" id="timeRange" />
+                <form>
+                    <div class="input-group mb-auto">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">Date range</span>
+                        </div>
+                        <input type="text" name="datetimes" id="queue_timeRange" />
 
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Send</button>
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">Camera</span>
+                        </div>
+                        <input type="text" class="form-control" id="queue_camera" value="">
+
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">Border</span>
+                        </div>
+                        <input type="text" class="form-control" id="queue_border" value="">
+
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">In|Out</span>
+                        </div>
+                        <input type="text" class="form-control" id="queue_inOut" value="">
+
+                        <button type="button" class="btn btn-primary" onclick="getServerSata();">Get data</button>
+
+                    </div>
+
+
+                </form>
             </div>
         </div>
     </div>
@@ -113,20 +162,23 @@
             <span class="badge badge-info">Out:<span id="out_users"></span></span>
 
         </div>
-        <div class="card-body">                   
+        <div class="card-body">
             <table id="tableStat" class="display" style="width:100%">
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Camera</th>
                         <th>Border</th>
+                        <th>Camera</th>
                         <th>In|Out</th>
                         <th>Time</th>
                     </tr>
                 </thead>
-                <tbody>
-                </tbody>
             </table>
+            <div class="d-flex justify-content-center" id="alertInfo">
+                <div class="spinner-border" role="status"  id="spinner">
+                    <span class="sr-only">Loading...</span>
+                </div>
+            </div>
         </div>
     </div>
 

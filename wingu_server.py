@@ -40,28 +40,7 @@ test_streams_config =  {'streamsConfigList':
                         }
 
 counter = 0
-stats_data = [
-    [1, "border1", "file_39", 1, 1611752111], 
-    [2, "border1", "file_39", 0, 1611752159], 
-    [3, "border1", "file_39", 1, 1611752259], 
-    [4, "border1", "file_39", 1, 1611752260],
-    [5, "border1", "file_39", 0, 1611752273], 
-    [6, "border1", "file_39", 1, 1611752351], 
-    [7, "border1", "file_39", 0, 1611752398], 
-    [8, "border1", "file_39", 1, 1611752495], 
-    [9, "border1", "file_39", 1, 1611752497], 
-    [10, "border1", "file_39", 0, 1611752509], 
-    [11, "border1", "file_39", 1, 1611752547], 
-    [12, "border1", "file_39", 1, 1611752573], 
-    [13, "border1", "file_39", 1, 1611752585], 
-    [14, "border1", "file_39", 1, 1611752630], 
-    [15, "border1", "file_39", 0, 1611752669], 
-    [16, "border1", "file_39", 0, 1611752682], 
-    [17, "border1", "file_39", 1, 1611752688], 
-    [18, "border1", "file_39", 0, 1611752809], 
-    [19, "border1", "file_39", 1, 1611752923], 
-    [20, "border1", "file_39", 0, 1611752936]
-    ]
+stats_data = [[1, "border1", "file_39", 1, 1611752111],[2, "border1", "file_39", 0, 1611752159], [3, "border1", "file_39", 1, 1611752259], [4, "border1", "file_39", 1, 1611752260], [5, "border1", "file_39", 0, 1611752273]]
 ############################################################
 
 class Server:
@@ -90,6 +69,7 @@ class Server:
 
         self.live_streams = {}
 
+        # route part
         self.routes = [
                 ('GET', '/',  self.Index),
                 ('GET', '/ws',  WebSocket),
@@ -112,7 +92,6 @@ class Server:
 
         #app = web.Application(middlewares=middle)
 
-        # route part
         self.app = web.Application()
         for route in self.routes:
             self.app.router.add_route(route[0], route[1], route[2])
@@ -126,13 +105,8 @@ class Server:
         print("starting GPU manager")
         self.app.on_startup.append(self.start_background_tasks)
         self.app.on_cleanup.append(self.cleanup_background_tasks)
-        #self.app.cleanup_ctx.append(self.init_db)
-        #time.sleep(2)
-        #print("db", self.app)
-        #self.app['manager'] = set()
         self.app['manager'] = gpusManager.Manager(self.managerConfigFile)
 
-        # manager.daemon = True
         self.log.info('Running...')
         web.run_app(self.app)
 
@@ -140,24 +114,6 @@ class Server:
         if 'manager' in self.app:
             self.app['manager'].kill()
         self.log.info('The server stopped!')
-        # print(sys.exc_info())
-
-        #async def camerasList(request):
-        #    data = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
-        #    return  web.json_response(data)
-
-        #async def getFilesList(request):
-        #    #params = request.rel_url.query
-        #    #print(params)
-        #    #print(params['file_1'])
-        #    #// json data structure:  name, size in GB, last change time
-        #    data = {'files':{'39.avi':[0.4,'20.10.2020'], 'new':{'45.avi':[0.4,'20.10.2020']}}};
-        #    return  web.json_response(data)
-
-        #async def addToQueue(request):
-        #    msg_json = json.loads('data from post')
-        #    print(msg_json)
-        #    return  web.json_response({'answer':['addToQueue','ok',request]})
 
     async def saveConfig(self, ws, config):
         res = {'OK':["saveConfig", config['tp'], config['name']]}
@@ -184,10 +140,12 @@ class Server:
             print("Server updated", params)
             if 'cmd' in params and "name" in params and 'status' in params:
                 print("universal ok!!!!", params['cmd'], params['name'], params['status'])
+                if 'cmd' == 'stopStream':
+                    if 'manager' in self.app:                     
+                        self.app['manager'].removeCam(name)
                 if 'websocketscmd' in self.app:
-                    if 'manager' in self.app:
                         res = {}
-                        res[params['status']] = [params['cmd'],params['name']]
+                        res[params['status']] = [params['cmd'], params['name']]
                         print("res", res)
                         for ws in self.app['websocketscmd']:
                             await ws.send_json(res)
@@ -219,13 +177,11 @@ class Server:
                     elif msg_json['cmd'] == 'getStreamsConfig':
                          if "manager" in self.app:
                             await self.app["manager"].getStreamsConfig(ws)
-                            # data = test_streams_config                    
-                            # await ws.send_json(data)
                          else:
                             await ws.send_json({"error":['getStreamsConfig', msg.data]})                             
                     elif msg_json['cmd'] == 'getManagerData':
                         if True:
-                            #   if "manager" in app:
+                            # if "manager" in app:
                             # data = app["manager"].getConfig()
                             # print("test_manager_config")
                             data = test_manager_config
@@ -295,25 +251,23 @@ class Server:
         request.app['websocketscmd'].remove(ws)
         return ws
 
-
     async def getFileImg(self, request):
         try:
-            print("server getFileImag start==============")
+            print("server getFileImag start")
             if ('file' in request.rel_url.query):
                 fileName = request.rel_url.query['file']
                 print("filaName", fileName) #'video/39.avi'            
-                # if os.path.isfile(fileName):
                 vidcap = cv2.VideoCapture(fileName)
                 time.sleep(1)
                 if vidcap.isOpened():
-                    print("server getFileImag ok==============")
+                    print("server getFileImag ok")
                     ret, img = vidcap.read()
                     img = cv2.resize(img, (541,416), interpolation=cv2.INTER_AREA)
                     res = cv2.imencode('.JPEG', img)[1].tobytes()
                     vidcap.release()
                     return web.Response(body=res)
                 else:
-                    print("server getFileImag wait more==============")
+                    print("server getFileImag wait more...")
                     time.sleep(3)
                     if vidcap.isOpened():
                         ret, img = vidcap.read()
@@ -382,14 +336,6 @@ class Server:
             print("websocket is not available for stream")
             self.removeLiveStream(ws, stream)
 
-            #conn = sqlite3.connect(self.db_path)
-            #c = conn.cursor()
-            #c.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
-            #c.execute('CREATE TABLE stats (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, time INTEGER)')
-            #c.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, in_out INTEGER, time INTEGER)')
-            #conn.commit()
-            #conn.close()
-
     def init_db(self):
         loop = asyncio.new_event_loop()
         loop.run_until_complete(self.a_init_db())
@@ -453,13 +399,9 @@ class Server:
 
         #  background task 
     async def background_process(self):
-        #await self.try_make_db()
         while True:
             # self.log.debug('Run background task each 1 min')
-            # print("len websocketscmd:", str(len(self.app['websocketscmd'])))
             try:
-                #await save_statistic("intersetions", "file_0", ["border_a","border_b"])
-                # print("server tik")
                 if 'manager' in self.app:
                     try:
                         stats = self.app['manager'].getCamsStat()
@@ -492,7 +434,6 @@ class Server:
         print("start cleanup_background_tasks")
         app['dispatch'].cancel()
         await self.app['dispatch']
-      #  end background task 
 
 if __name__ == "__main__":
     try:

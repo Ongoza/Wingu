@@ -146,7 +146,7 @@ class VideoCapture:
         return status
 
     def get_cur_stat(self):
-        res = np.array(self.intersections)
+        res = self.intersections.copy()
         self.intersections = []
         return res 
 
