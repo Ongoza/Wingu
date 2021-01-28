@@ -53,7 +53,7 @@ class Manager(threading.Thread):
                     print("len=", len(self.config['gpus_configs_list']), len(gpus))
                     self.isGPU = True
                     nvidia_smi.nvmlInit()
-                    self.gpuInfo = [] 
+                    self.gpuInfo = {} 
                     if len(gpus) <= len(self.config['gpus_configs_list']):
                         print("gpus_configs_list, gpus config is ok", self.config['gpus_configs_list'])
                         for index, gpu_id in enumerate(gpus):
@@ -71,7 +71,7 @@ class Manager(threading.Thread):
                                 self.gpusConfigList[name] = cfg
                                 if device in self.config['autostart_gpus_list']:
                                     self.startGpu(cfg, name)
-                                    self.gpuInfo.append(nvidia_smi.nvmlDeviceGetHandleByIndex(index))
+                                    self.gpuInfo[name] = nvidia_smi.nvmlDeviceGetHandleByIndex(index)
                                     time.sleep(3)
                 else:
                     name = "/CPU:0"
@@ -330,13 +330,17 @@ class Manager(threading.Thread):
     def getHardwareStatus(self):
         res = {}
         try:
-            res = {'cpu':[int(psutil.cpu_percent()), int(psutil.virtual_memory().percent), int(psutil.sensors_temperatures()['i350bb'][0].current])}        
+            c_t = int(psutil.sensors_temperatures()['i350bb'][0].current)
+            #c_t = 0
+            res = {'cpu':[int(psutil.cpu_percent()), int(psutil.virtual_memory().percent), c_t, len(self.camsList)]}        
             if self.isGPU:
                 if self.gpuInfo:
-                    for index, handle in enumerate(self.gpuInfo):
+                    for name in self.gpuInfo:
+                        handle = self.gpuInfo(name) 
                         gpu = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
                         temp = nvidia_smi.nvmlDeviceGetTemperature(handle, nvidia_smi.NVML_TEMPERATURE_GPU)
-                        res['GPU_'+str(index)] = [int(gpu.gpu), int(gpu.memory), int(temp)]
+                        num = len(self.getActiveGpusList[name].cams)
+                        res[name] = [int(gpu.gpu), int(gpu.memory), int(temp), num]
         except:
             print("get hardware")
             print(sys.exc_info())

@@ -352,7 +352,7 @@ class Server:
                 return
             async with aiosqlite.connect(self.db_path) as db:
                  await db.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
-                 await db.execute('CREATE TABLE stats (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, time INTEGER)')
+                 await db.execute('CREATE TABLE hardware (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, streams INTEGER, time INTEGER)')
                  await db.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, in_out INTEGER, time INTEGER)')
                  await db.commit()
             print("DB created!")
@@ -383,7 +383,7 @@ class Server:
             strText = await request.text()
             params = json.loads(strText)
             print("request getStatsHard data", params)
-            sql = 'SELECT * FROM stats where time >= ' 
+            sql = 'SELECT * FROM hardware where time >= ' 
             if 'time_start' in params: time_start = str(params['time_start'])
             else: time_start = 1611751629
             if 'time_end' in params: sql += ' AND time < ' + str(params['time_end'])
@@ -480,9 +480,10 @@ class Server:
                 if 'manager' in self.app:
                     try:        
                         hard = self.app['manager'].getHardwareStatus()
-                        cur_time = time.time()
+                        cur_time = int(time.time())
+                        print("hard", hard)
                         for item in hard:
-                            sql = f'INSERT INTO stats (device, cpu, mem, temp, time) VALUES("{item}", "{hard[item][0]}", {hard[item][1]}, {hard[item][2]}, {cur_time})'
+                            sql = f'INSERT INTO hardware (device, cpu, mem, temp, streams, time) VALUES("{item}", {hard[item][0]}, {hard[item][1]}, {hard[item][2]}, {hard[item][3]}, {cur_time})'
                             print("sql", sql)
                             async with aiosqlite.connect(self.db_path) as db:
                                 await db.execute(sql)
