@@ -8,8 +8,8 @@ import numpy as np
 import tensorflow as tf
 import yaml
 import cv2
-# import nvidia_smi
-#import psutil
+import nvidia_smi
+import psutil
 from requests_futures import sessions
 
 import gpuDevice
@@ -52,7 +52,8 @@ class Manager(threading.Thread):
                     print("gpus", gpus)
                     print("len=", len(self.config['gpus_configs_list']), len(gpus))
                     self.isGPU = True
-                    #nvidia_smi.nvmlInit()
+                    nvidia_smi.nvmlInit()
+                    self.gpuInfo = [] 
                     if len(gpus) <= len(self.config['gpus_configs_list']):
                         print("gpus_configs_list, gpus config is ok", self.config['gpus_configs_list'])
                         for index, gpu_id in enumerate(gpus):
@@ -70,6 +71,7 @@ class Manager(threading.Thread):
                                 self.gpusConfigList[name] = cfg
                                 if device in self.config['autostart_gpus_list']:
                                     self.startGpu(cfg, name)
+                                    self.gpuInfo.append(nvidia_smi.nvmlDeviceGetHandleByIndex(index))
                                     time.sleep(3)
                 else:
                     name = "/CPU:0"
@@ -87,8 +89,9 @@ class Manager(threading.Thread):
                     cfg = self.loadConfig(stream, "Stream_")
                     if cfg != None:
                         self.streamsConfigList[stream] = cfg
-                        if stream in self.config['autotart_streams']:
-                            self.startStream(stream)
+                        if self.config['autotart_streams']:
+                            if stream in self.config['autotart_streams']:
+                                self.startStream(stream)
                 self.ready = True
                 try:
                     self.log.debug("GPUsmanager try to autostart "+ stream)
@@ -125,6 +128,7 @@ class Manager(threading.Thread):
                 gpu_id = self.camsList[cam_id]
                 del self.camsList[cam_id]
                 self.gpusActiveList[gpu_id].removeCam(cam_id)
+                print("GpusManager removeCam OK")
         except:
             print("GpusManager error get remove cam")
             print(sys.exc_info())
@@ -323,29 +327,20 @@ class Manager(threading.Thread):
         #np.append(uid, np.uint8(device_id))
         return {'managerConfig':self.config, 'gpusConfigList':self.gpusConfigList}
 
-    async def getHardwareStatus(self):
-        res = []
-        res.append(psutil.cpu_percent()) 
-        res.append(psutil.virtual_memory().percent)
-        res.append(psutil.virtual_memory().available * 100 / psutil.virtual_memory().total)
-        res_gpu = []
-        if self.isGPU:
-            for i in self.camsList:
-                r = nvidia_smi.nvmlDeviceGetHandleByIndex(i)
-                res_gpu.append[r.cpu]
-                res_gpu.append[r.mem]
-                # res_gpu.append[r.used/r.total]
-        res.append(res_gpu)
-
-        sql = f'INSERT INTO {self.db_table_name}(border, stream_id, time) VALUES("{item}", "{id}", {int(time.time())})'
-        print("sql", sql)
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(sql)
-            await db.commit()
-
-        # stats
-        # res["Disk %"] = psutil
-        #await save_statistic("stats", 0, res)
+    def getHardwareStatus(self):
+        res = {}
+        try:
+            res = {'cpu':[int(psutil.cpu_percent()), int(psutil.virtual_memory().percent), int(psutil.sensors_temperatures()['i350bb'][0].current])}        
+            if self.isGPU:
+                if self.gpuInfo:
+                    for index, handle in enumerate(self.gpuInfo):
+                        gpu = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
+                        temp = nvidia_smi.nvmlDeviceGetTemperature(handle, nvidia_smi.NVML_TEMPERATURE_GPU)
+                        res['GPU_'+str(index)] = [int(gpu.gpu), int(gpu.memory), int(temp)]
+        except:
+            print("get hardware")
+            print(sys.exc_info())
+        return res
 
     def startGpu(self, configFile, device="/CPU:0"):
         # id 0 - CPU, 1 - the first GPU,  etc 

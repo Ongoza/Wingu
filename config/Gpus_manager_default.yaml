@@ -5,7 +5,6 @@ gpus_configs_list:
 - device0
 - device1
 autotart_streams:
-- file_39
 streams:
 - file_39
 - file_43

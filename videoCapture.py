@@ -112,7 +112,7 @@ class VideoCapture:
                     self.q = VideoCaptureStream(self.url)
                 else:
                     self.cap = cv2.VideoCapture(self.url)
-                    self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - self.skip_frames
+                    self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - 10
                 self._stopevent = threading.Event()
                 #if client is not None:
                 #    client.send_json({'OK':["startStream", self.id]})
@@ -172,6 +172,8 @@ class VideoCapture:
                 self.proceedTime[0] = time.time() - start
                 return frame
             else:
+                self.session.get(self.server_URL+'cmd=stopStream&name='+self.id+'&status=OK&module=stream')
+                time.sleep(1)
                 self.kill()
         else:
             start = time.time()

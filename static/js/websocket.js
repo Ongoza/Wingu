@@ -2,6 +2,40 @@
 //    отправка id сессии для проверки прав доступа   
 
 var wsCmd = null;
+
+function getStreamsConfig() {
+    if (wsCmd != null) {
+        if (wsCmd.readyState == 1) {
+            wsCmd.send(JSON.stringify({ "cmd": "getStreamsConfig" }));
+        } else {
+            console.log("Websocket is not ready. Wait a sec.")
+            setTimeout(() => { getStreamsConfig(); }, 500);
+        }
+    } else { console.log("Error websocket does not exist!!"); }
+}
+
+function getGpuList() {
+    if (wsCmd != null) {
+        if (wsCmd.readyState == 1) {
+            wsCmd.send(JSON.stringify({ "cmd": "getCameras" }));
+        } else {
+            console.log("Websocket is not ready. Wait a sec.")
+            setTimeout(() => { getCamerasList(); }, 500);
+        }
+    } else { console.log("Error websocket does not exist!!"); }
+}
+
+function getManagerData() {
+    if (wsCmd != null) {
+        if (wsCmd.readyState == 1) {
+            wsCmd.send(JSON.stringify({ "cmd": "getManagerData" }));
+        } else {
+            console.log("Websocket is not ready. Wait a sec.")
+            setTimeout(() => { getManagerData(); }, 500);
+        }
+    } else { console.log("Error websocket does not exist!!"); }
+}
+
 function WebSocketCmd() {
             
             if ("WebSocket" in window) {
@@ -18,14 +52,14 @@ function WebSocketCmd() {
 				
                wsCmd.onmessage = function (evt) { 
                   // var received_msg = evt.data;
-                  console.log("Message is received!");
+                  // console.log("Message is received!");
                    try {
                        if (evt.data instanceof Blob) {
                            console.log("Binary data!", evt.data);
                            showFrame(evt.data);
                        } else {
                           let jsonData = JSON.parse(evt.data);
-                           console.log("Message 2 is received: ", jsonData);
+                           // console.log("Message 2 is received: ", jsonData);
                            for (var item in jsonData) {
                                switch (item) {
                                    case 'streamsConfigList': {
@@ -46,7 +80,7 @@ function WebSocketCmd() {
                                        break;
                                    }
                                    case 'camsList': {
-                                       console.log("!!!managerConfig data updating...", jsonData);
+                                       // console.log("!!!managerConfig data updating...", jsonData);
                                        localStorage.setItem('camsList', JSON.stringify(jsonData['camsList']));
                                        configViewUpdate('camsList');
                                        break;

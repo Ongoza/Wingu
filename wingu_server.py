@@ -78,6 +78,8 @@ class Server:
                 # ('*',   '/login',   Login,     'login'),
                 # ('POST', '/sign/{action}',  Sign,    'sign'),
                 ('GET',  '/stats', self.getStats),
+                ('POST',  '/statsJson', self.getStatsJson),
+                ('POST',  '/statsHardJson', self.getStatsHardJson),
                 ('GET',  '/getFileImg', self.getFileImg),
                 #('GET',  '/filesList', self.getFilesList),
                 ('GET',  '/update', self.update),
@@ -140,9 +142,9 @@ class Server:
             print("Server updated", params)
             if 'cmd' in params and "name" in params and 'status' in params:
                 print("universal ok!!!!", params['cmd'], params['name'], params['status'])
-                if 'cmd' == 'stopStream':
+                if params['cmd'] == 'stopStream':
                     if 'manager' in self.app:                     
-                        self.app['manager'].removeCam(name)
+                        self.app['manager'].removeCam(params['name'])
                 if 'websocketscmd' in self.app:
                         res = {}
                         res[params['status']] = [params['cmd'], params['name']]
@@ -158,7 +160,9 @@ class Server:
                             await self.app["manager"].getStreamsConfig(ws)
             else:
                 print("Server update Unknown caommnd")
-        except: print("server except in update")
+        except: 
+            print("server except in update")
+            print(sys.exc_info())
 
     async def WebSocketCmd(self, request):
         ws = web.WebSocketResponse()
@@ -373,6 +377,68 @@ class Server:
             print("error save data", cams)
             print(sys.exc_info())
 
+    async def getStatsHardJson(self, request):
+        print("request getStats")
+        try:
+            strText = await request.text()
+            params = json.loads(strText)
+            print("request getStatsHard data", params)
+            sql = 'SELECT * FROM stats where time >= ' 
+            if 'time_start' in params: time_start = str(params['time_start'])
+            else: time_start = 1611751629
+            if 'time_end' in params: sql += ' AND time < ' + str(params['time_end'])
+            print('sql=', sql)
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(sql) as cursor:
+                    rows = await cursor.fetchall()
+                    if rows: res = json.dumps({'getStatsHard':rows})
+                    else: res = json.dumps({'getStatsHard':[]})
+            return web.json_response(res)
+        except:
+            return web.json_response({"error":["getStatsHardJson"]})
+            print(sys.exc_info())
+
+
+    async def getStatsJson(self, request):
+        print("request getStats")
+        try:
+            strText = await request.text()
+            params = json.loads(strText)
+            sql = 'SELECT * FROM intersetions where time >= ' 
+            if params:
+                if 'time_start' in params: time_start = str(params['time_start'])
+                else: time_start = 1611751629
+                sql += str(time_start)
+                if 'time_end' in params: sql += ' AND time < ' + str(params['time_end'])
+                if 'stream_id' in params:
+                    if len(params['stream_id']) > 1:
+                        sql += ' AND ('
+                        counter = True
+                        for cam_name in params['stream_id']:
+                            if counter:
+                                counter = False
+                            else:
+                                sql += ' OR '
+                            sql += 'stream_id = "' + str(cam_name)+'"'
+                        sql += ')' 
+                    else:
+                        sql += ' AND stream_id = "' + str(params['stream_id'][0])+'"'
+                if 'in_out' in params:
+                    sql += ' AND in_out = ' + str(params['in_out'])
+            else: sql += str(1611751620)
+            sql += ' ORDER BY time'
+            print('sql=', sql)
+            async with aiosqlite.connect(self.db_path) as db:
+                async with db.execute(sql) as cursor:
+                    rows = await cursor.fetchall()
+                    # print("rows", len(rows), type(rows))
+                    if rows: res = json.dumps({'getStats':rows})
+                    else: res = json.dumps({'getStats':[]})
+            return web.json_response(res)
+        except:
+            return web.json_response({"error":["getStatsJson"]})
+            print(sys.exc_info())
+
     async def getStats(self, request):
         print("request getStats")
         try:
@@ -405,11 +471,25 @@ class Server:
                 if 'manager' in self.app:
                     try:
                         stats = self.app['manager'].getCamsStat()
-                        print("stats", stats)
+                        # print("stats", stats)
                         if stats:
                             await self.save_statistic(stats)
                     except:
                         print("error save stats")
+                        print(sys.exc_info())
+                if 'manager' in self.app:
+                    try:        
+                        hard = self.app['manager'].getHardwareStatus()
+                        cur_time = time.time()
+                        for item in hard:
+                            sql = f'INSERT INTO stats (device, cpu, mem, temp, time) VALUES("{item}", "{hard[item][0]}", {hard[item][1]}, {hard[item][2]}, {cur_time})'
+                            print("sql", sql)
+                            async with aiosqlite.connect(self.db_path) as db:
+                                await db.execute(sql)
+                                await db.commit()
+                                print("save data ok")
+                    except:
+                        print("error save hardSatus")
                         print(sys.exc_info())
                 if 'websocketscmd' in self.app:
                     if self.app['websocketscmd']:

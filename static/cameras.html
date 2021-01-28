@@ -316,39 +316,6 @@
         //    } else { console.log("Error websocket does not exist!!"); }
         //}
 
-        function getGpuList() {
-            if (wsCmd != null) {
-                if (wsCmd.readyState == 1) {
-                    wsCmd.send(JSON.stringify({ "cmd": "getCameras" }));
-                } else {
-                    console.log("Websocket is not ready. Wait a sec.")
-                    setTimeout(() => { getCamerasList(); }, 500);
-                }
-            } else { console.log("Error websocket does not exist!!"); }
-        }
-
-        function getStreamsConfig() {
-            if (wsCmd != null) {
-                if (wsCmd.readyState == 1) {
-                    wsCmd.send(JSON.stringify({ "cmd": "getStreamsConfig" }));
-                } else {
-                    console.log("Websocket is not ready. Wait a sec.")
-                    setTimeout(() => { getStreamsConfig(); }, 500);
-                }
-            } else { console.log("Error websocket does not exist!!"); }
-        }
-
-        function getManagerData() {
-            if (wsCmd != null) {
-                if (wsCmd.readyState == 1) {
-                    wsCmd.send(JSON.stringify({ "cmd": "getManagerData" }));
-                } else {
-                    console.log("Websocket is not ready. Wait a sec.")
-                    setTimeout(() => { getManagerData(); }, 500);
-                }
-            } else { console.log("Error websocket does not exist!!"); }
-        }
-
         $(document).ready(function () {
             //getCamerasListAjax();
             //addRow(['id','name','online','counting','comments','url','borders']);

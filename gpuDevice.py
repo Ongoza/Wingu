@@ -132,6 +132,11 @@ class GpuDevice(threading.Thread):
         except:
             print("can not stop some cams")
 
+    def removeCam(self, cam_id):
+        print("GpuDevice removeCam", cam_id)
+        if cam_id in self.cams:
+            del self.cams[cam_id]
+
     def run(self):
         self.log.debug("GpuDevice starting "+str(self.id))
         while not self._stopevent.isSet():
