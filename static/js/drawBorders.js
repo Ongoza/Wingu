@@ -155,14 +155,17 @@ function saveToServer() {
             'body_res': [256, 128],
             'display_video_flag': true,
             'max_cosine_distance': 0.2,
-            'save_video_flag': true,
+            'save_video_flag': false,
+            'type': 0, // 0 - stream, 1 - area 
             'skip_frames': 0,
+            'encoder': 'gdet',
             'encoder_filename': 'mars-small128.pb',
             'batch_size': 32,
             'img_size_start': [1600, 1200],
             'save_video_res': [720, 540],
             'borders': {}
         };
+        let isNew = false;
         //id, url, skip_frames, isFromFile, save_path, save_video_res, save_video_flag
         if (curCamId in streamsConfigList) {
             if (streamsConfigList[curCamId].hasOwnProperty('url')) {
@@ -170,16 +173,18 @@ function saveToServer() {
                 defaultConfig = streamsConfigList[curCamId];
             }
         } else {
+            isNew = true;
             defaultConfig['borders'] = tmp_config_borders;
         }
         //for (var key in defaultConfig) {
         // console.log("$('#addStream_isFromFile').val()", $('#addStream_isFromFile').prop('checked'))
         // defaultConfig['id'] = $('#addStream_id').val();
-        addStream_save_video_flag
+        // addStream_save_video_flag
         let name = $('#addStream_id').val();
         let autostart = $('#addStream_autostart').prop('checked');
         defaultConfig['name'] = $('#addStream_name').val();
         defaultConfig['url'] = $('#addStream_url').val();
+        defaultConfig['type'] = $('#addStream_type').val();
         defaultConfig['skip_frames'] = parseInt($('#addStream_skip_frames').val());
         defaultConfig['isFromFile'] = $('#addStream_isFromFile').prop('checked');
         defaultConfig['save_path'] = $('#addStream_save_path').val();
@@ -191,7 +196,7 @@ function saveToServer() {
         if (wsCmd == null) { WebSocketCmd();}
          //wsCmd.send(JSON.stringify({ "cmd": "getManagerData" }));
 
-        wsCmd.send(JSON.stringify({ "cmd": "saveStream", "config": { "name": name, "tp": 'Stream_', "data": defaultConfig, "autostart": autostart} }));
+        wsCmd.send(JSON.stringify({ "cmd": "saveStream", "config": { "name": name, "tp": 'Stream_', "data": defaultConfig, "autostart": autostart, "isNew": isNew} }));
     } else {
         alert("Please add some borders!!!!");
     }

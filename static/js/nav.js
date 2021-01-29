@@ -12,7 +12,7 @@ var langText = {
         cameras: {en:"Cameras", ru: "Камеры"},
         config: {en:"Config", ru: "Настройки"},
         server: {en:"Server", ru: "Сервер"},
-        file: {en:"File", ru: "Файл"},
+        //area: {en:"Area", ru: "Область"},
         log: {en:"Log", ru: "Log"},
         about: {en:"About", ru: "О системе"},
 
@@ -32,6 +32,7 @@ const divNav = `
                     
                     <li class="nav-item" id='menu_server'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='server'></a></li>
                     <li class="nav-item" id='menu_config'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='config'></a></li>
+
                     <li class="nav-item" id='menu_log'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='log'></a></li>
                     <li class="nav-item" id='menu_about'><a class="nav-link text" href="#" onclick="doMenu(this.id)" id='about'></a></li>
                 </ul>

@@ -118,17 +118,38 @@ class Server:
         self.log.info('The server stopped!')
 
     async def saveConfig(self, ws, config):
-        res = {'OK':["saveConfig", config['tp'], config['name']]}
+        res = {'OK':["saveConfig", config['tp'], config['name'], config['autostart'], config['isNew']]}
         print(res)
         fileName = os.path.join('config', config['tp'] + str(config['name'])+'.yaml')
         try:
             if os.path.isfile(fileName):
-                copyfile(fileName, fileName+"."+str(time.time()))
                 print("Create backup for config " + fileName)
+                copyfile(fileName, fileName+"."+str(time.time()))
             with open(fileName, 'w', encoding='utf-8') as f:    
                 yaml.dump(config['data'], f)
+            if config['autostart'] or config['isNew']:
+                print("change GPUSMAnagerConfig")
+                fileNameManager = os.path.join('config', 'Gpus_manager_'+self.managerConfigFile+'.yaml')                
+                copyfile(fileNameManager, fileNameManager+"."+str(time.time()))
+                with open(fileNameManager, encoding='utf-8') as f:    
+                    cfg = yaml.load(f, Loader=yaml.FullLoader)
+                print("loaded old one")
+                print("add new stream to streams list!!", cfg['streams'])
+                if config['isNew']:
+                    if cfg['streams'] is None: cfg['streams'] = []
+                    if config['name'] not in cfg['streams']:
+                        cfg['streams'].append(config['name'])
+                print("add this stream to autostart!!", cfg['autostart_streams'])
+                if config['autostart']:
+                    if cfg['autostart_streams'] is None: cfg['autostart_streams'] = []
+                    if config['name'] not in cfg['autostart_streams']:
+                        cfg['autostart_streams'].append(config['name'])
+                print("save result")    
+                with open(fileNameManager, 'w', encoding='utf-8') as f:    
+                    yaml.dump(cfg, f)
+                self.log.info("server saved the config for " + fileName )
             if 'manager' in self.app:
-                await self.app["manager"].addConfig(config['name'], config['tp'], config['data'], client=ws)
+                await self.app["manager"].addConfig(config['name'], config['tp'], config['data'], client=ws, auto=config['autostart']) 
         except:
             self.log.error("Can not save config for " + fileName )
             print(sys.exc_info())
@@ -142,6 +163,9 @@ class Server:
             print("Server updated", params)
             if 'cmd' in params and "name" in params and 'status' in params:
                 print("universal ok!!!!", params['cmd'], params['name'], params['status'])
+                if params['status'] == 'error' and params['cmd'] == 'startStream':
+                        self.app['manager'].removeCam(params['name'])
+                        self.log.info("stop to start by error stream " + params['name'])
                 if params['cmd'] == 'stopStream':
                     if 'manager' in self.app:                     
                         self.app['manager'].removeCam(params['name'])
@@ -184,12 +208,10 @@ class Server:
                          else:
                             await ws.send_json({"error":['getStreamsConfig', msg.data]})                             
                     elif msg_json['cmd'] == 'getManagerData':
-                        if True:
-                            # if "manager" in app:
-                            # data = app["manager"].getConfig()
-                            # print("test_manager_config")
-                            data = test_manager_config
-                            # print("data", data)
+                        if "manager" in self.app:
+                            data = self.app["manager"].getConfig()
+                            # data = test_manager_config
+                            print("getManagerData", data)
                             await ws.send_json(data)
                         else:
                             print(sys.exc_info())
@@ -477,21 +499,21 @@ class Server:
                     except:
                         print("error save stats")
                         print(sys.exc_info())
-                if 'manager' in self.app:
-                    try:        
-                        hard = self.app['manager'].getHardwareStatus()
-                        cur_time = int(time.time())
-                        print("hard", hard)
-                        for item in hard:
-                            sql = f'INSERT INTO hardware (device, cpu, mem, temp, streams, time) VALUES("{item}", {hard[item][0]}, {hard[item][1]}, {hard[item][2]}, {hard[item][3]}, {cur_time})'
-                            print("sql", sql)
-                            async with aiosqlite.connect(self.db_path) as db:
-                                await db.execute(sql)
-                                await db.commit()
-                                print("save data ok")
-                    except:
-                        print("error save hardSatus")
-                        print(sys.exc_info())
+                    if False:
+                        try:        
+                            hard = self.app['manager'].getHardwareStatus()
+                            cur_time = int(time.time())
+                            print("hard", hard)
+                            for item in hard:
+                                sql = f'INSERT INTO hardware (device, cpu, mem, temp, streams, time) VALUES("{item}", {hard[item][0]}, {hard[item][1]}, {hard[item][2]}, {hard[item][3]}, {cur_time})'
+                                print("sql", sql)
+                                async with aiosqlite.connect(self.db_path) as db:
+                                    await db.execute(sql)
+                                    await db.commit()
+                                    print("save data ok")
+                        except:
+                            print("error save hardSatus")
+                            print(sys.exc_info())
                 if 'websocketscmd' in self.app:
                     if self.app['websocketscmd']:
                         if 'manager' in self.app:

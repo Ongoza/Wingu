@@ -89,8 +89,8 @@ class Manager(threading.Thread):
                     cfg = self.loadConfig(stream, "Stream_")
                     if cfg != None:
                         self.streamsConfigList[stream] = cfg
-                        if self.config['autotart_streams']:
-                            if stream in self.config['autotart_streams']:
+                        if self.config['autostart_streams']:
+                            if stream in self.config['autostart_streams']:
                                 self.startStream(stream)
                 self.ready = True
                 try:
@@ -157,9 +157,19 @@ class Manager(threading.Thread):
             print(sys.exc_info())
         return res
 
-    async def addConfig(self, name, type, cfg, client=None):
+    async def addConfig(self, name, type, cfg, client=None, auto=None):
         print("GPUsmanager start addConfig", name, type, cfg)
         if type=="Stream_":
+            if auto is not None:
+                if auto:
+                    print("manager auto", self.config['autostart_streams'] )
+                    if self.config['autostart_streams'] is None: self.config['autostart_streams'] = []
+                    if name not in self.config['autostart_streams']:
+                       self.config['autostart_streams'].append(name)
+                else:
+                    if self.config['autostart_streams'] is None: self.config['autostart_streams'] = []
+                    if name in self.config['autostart_streams']:
+                       self.config['autostart_streams'].remove(name)
             if name in self.camsList:
                # !!!!!!!!!!!!!!!!! restart cam!!!!!!!!!!!!
                # self.stopStream(name)
@@ -279,7 +289,7 @@ class Manager(threading.Thread):
         except:
             print(sys.exc_info())
             self.log.debug("GPUsmanager Can not start stream!")
-            self.send_data("cmd=startStream&name=" + cam_id + "&status=error&module=Manager")
+            self.send_data("cmd=startStream&name=" + configName + "&status=error&module=Manager")
 
     def stopStream(self, cam_id):
         try:
@@ -325,7 +335,7 @@ class Manager(threading.Thread):
 
     def getConfig(self):
         #np.append(uid, np.uint8(device_id))
-        return {'managerConfig':self.config, 'gpusConfigList':self.gpusConfigList}
+        return {'managerConfig':self.config}
 
     def getHardwareStatus(self):
         res = {}
@@ -336,7 +346,7 @@ class Manager(threading.Thread):
             if self.isGPU:
                 if self.gpuInfo:
                     for name in self.gpuInfo:
-                        handle = self.gpuInfo(name) 
+                        handle = self.gpuInfo[name]
                         gpu = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
                         temp = nvidia_smi.nvmlDeviceGetTemperature(handle, nvidia_smi.NVML_TEMPERATURE_GPU)
                         num = len(self.getActiveGpusList[name].cams)

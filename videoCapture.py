@@ -78,6 +78,8 @@ class VideoCapture:
             self.config = camConfig
             print("VideoCapture stream config", self.config)
             self.url = self.config['url']
+            if 'type' in self.config: self.type = self.config['type']
+            else: self.type = 0 
             self.isFromFile = self.config['isFromFile']
             self.cap = None
             self.img_size = int(gpuConfig['img_size'])
@@ -166,8 +168,10 @@ class VideoCapture:
                 if (ret):
                    frame = cv2.resize(frame, self.frame_res)
                    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                   if self.type == 1:
+                       print("start cut area")
                 else:
-                    #self.log.debug("Skip frame")
+                    # self.log.debug("Skip frame")
                     frame = self.read()
                 self.proceedTime[0] = time.time() - start
                 return frame
@@ -182,6 +186,9 @@ class VideoCapture:
             self.proceed_frames_cnt += 1
             frame = cv2.resize(frame, self.frame_res)
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            if self.type == 1:
+               print("start cut area")
+               #https://stackoverflow.com/questions/48301186/cropping-concave-polygon-from-image-using-opencv-python
             self.proceedTime[0] = time.time() - start
             return frame
 
@@ -221,64 +228,68 @@ class VideoCapture:
         return frame
 
     def track(self, box, score, cl, frame):
-        try:  
+        try:
             start = time.time()
-            res = []
-            boxs = []
-            confs = []
-            for i in range(len(box)): 
-               if score[i] > 0:
-                   if cl[i] == 0:
-                     boxs.append((np.array(box[i])*self.img_size))
-                     confs.append(score[i])
-            if(len(boxs)):
-                with tf.device(self.vc_device):
-                    features = self.encoder(frame, boxs)
-                detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
-                self.tracker.predict()
-                self.tracker.update(detections)
-                for track in self.tracker.tracks:
-                    if(not track.is_confirmed() or track.time_since_update > 1):
-                        # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
-                        continue 
-                    xy = track.mean[:2].astype(np.int)# tuple(())
-                    clr = (255, 255, 0) # default color
-                    track_name = str(track.track_id) # default name
-                    if(hasattr(track, 'xy')):
-                        lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
-                        if lst_intrsc.keys():
-                            #border_line
-                            if(not hasattr(track, 'calculated')):
-                                #cnt_people_in[track.track_id] = 0
-                                track.calculated = "in_"
-                                self.intersections.append(lst_intrsc)
-                                track.color = (52, 235, 240)
-                                self.log.debug("intersection!! "+ self.id)
-                                res.append(lst_intrsc)
-                                track.cross_cnt = self.path_track
-                        if(hasattr(track, 'calculated')):
-                            clr = track.color
-                            track_name = track.calculated  + track_name
-                            track.cross_cnt -= 1
-                            if(track.cross_cnt < 1): track.state = 3 # delete from track list
-                        track.xy.append(xy)
-                        if len(track.xy) > self.path_track:
-                            track.xy = track.xy[-self.path_track:]
-                        # cv2.polylines(frame_sm, [np.array(track.xy)], False, clr, 3)
-                    else: 
-                        track.xy = [xy]
-                    if(self.isDrow):    
-                        txy =  tuple(xy)
-                        cv2.circle(frame, txy, 5, clr, -1)
-                        cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
-            self.drawBorderLines(frame)
-            cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, (255, 255, 0), 1)
-            frame = cv2.resize(frame,self.save_video_res)
-            self.outFrame = np.copy(frame)
-            # print('self.outFrame', self.outFrame)
-            if self.save_video_flag:
-                self.writeVideo()
-            self.proceedTime[1] = time.time() - start
+            if self.type == 0:
+                res = []
+                boxs = []
+                confs = []
+                for i in range(len(box)): 
+                   if score[i] > 0:
+                       if cl[i] == 0:
+                         boxs.append((np.array(box[i])*self.img_size))
+                         confs.append(score[i])
+                if(len(boxs)):
+                    with tf.device(self.vc_device):
+                        features = self.encoder(frame, boxs)
+                    # print("features", type (features), features[0].shape )
+                    detections = [Detection(bbox, conf, feature) for bbox, conf, feature in zip(boxs, confs, features)] 
+                    self.tracker.predict()
+                    self.tracker.update(detections)
+                    for track in self.tracker.tracks:
+                        if(not track.is_confirmed() or track.time_since_update > 1):
+                            # if(track.time_since_update > life_frame_limit): track.state = 3 # if missed to long than delete id
+                            continue 
+                        xy = track.mean[:2].astype(np.int)# tuple(())
+                        clr = (255, 255, 0) # default color
+                        track_name = str(track.track_id) # default name
+                        if(hasattr(track, 'xy')):
+                            lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
+                            if lst_intrsc.keys():
+                                #border_line
+                                if(not hasattr(track, 'calculated')):
+                                    #cnt_people_in[track.track_id] = 0
+                                    track.calculated = "in_"
+                                    self.intersections.append(lst_intrsc)
+                                    track.color = (52, 235, 240)
+                                    self.log.debug("intersection!! "+ self.id)
+                                    res.append(lst_intrsc)
+                                    track.cross_cnt = self.path_track
+                            if(hasattr(track, 'calculated')):
+                                clr = track.color
+                                track_name = track.calculated  + track_name
+                                track.cross_cnt -= 1
+                                if(track.cross_cnt < 1): track.state = 3 # delete from track list
+                            track.xy.append(xy)
+                            if len(track.xy) > self.path_track:
+                                track.xy = track.xy[-self.path_track:]
+                            # cv2.polylines(frame_sm, [np.array(track.xy)], False, clr, 3)
+                        else: 
+                            track.xy = [xy]
+                        if(self.isDrow):    
+                            txy =  tuple(xy)
+                            cv2.circle(frame, txy, 5, clr, -1)
+                            cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
+                self.drawBorderLines(frame)
+                cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, (255, 255, 0), 1)
+                frame = cv2.resize(frame,self.save_video_res)
+                self.outFrame = np.copy(frame)
+                # print('self.outFrame', self.outFrame)
+                if self.save_video_flag:
+                    self.writeVideo()
+                self.proceedTime[1] = time.time() - start
+            else:
+                print("start calculate people in area")
         except:
             print(sys.exc_info())
 

@@ -67,7 +67,6 @@ function WebSocketCmd() {
                                        localStorage.setItem('streamsConfigList', JSON.stringify(jsonData['streamsConfigList']));
                                        configViewUpdate('streamsConfigList');
                                        configViewUpdate('camsList');
-
                                            break;
                                        }
                                    case 'OK': {
@@ -83,6 +82,11 @@ function WebSocketCmd() {
                                        // console.log("!!!managerConfig data updating...", jsonData);
                                        localStorage.setItem('camsList', JSON.stringify(jsonData['camsList']));
                                        configViewUpdate('camsList');
+                                       break;
+                                   }
+                                   case 'managerConfig': {
+                                       console.log("!!!managerConfig data updating...", jsonData);
+                                       localStorage.setItem('managerConfig', JSON.stringify(jsonData['managerConfig']));
                                        break;
                                    }
                                    default: { // added brackets
