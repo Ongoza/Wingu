@@ -23,16 +23,147 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js"></script> -->
     <!-- <script src="js/websocket.js"></script> -->
     <script src="js/nav.js"></script>
+    <script src="js/websocket.js"></script>
+
     <script>
 
+        function confDevice() {
+            console.log("confDevice()");
+            alert("You don't have rights do it!")
+        }
+
+        function delDeviceDlg() {
+            console.log("delDeviceDlg()");
+            alert("You don't have rights do it!")
+        }
+
+        function saveToServer(){
+            console.log("saveToServer()");
+            alert("You don't have rights do it!")
+        }
+
+        function configViewUpdate(typeConfig) {
+            console.log("configViewUpdate", typeConfig);
+            try {
+                if (typeConfig == 'managerConfig') {
+                    let managerConfig = JSON.parse(localStorage.getItem('managerConfig'));
+                    $('#devices').find('tbody')
+                        .append($('<tr>').attr('id', "row_0")
+                            .append($('<td>').append(1))
+                            .append($('<td>').append('CPU'))
+                            .append($('<td>').append('device0'))
+                            .append($('<td>').append('Yes'))
+                            .append($('<td>').append('Yes'))
+                            .append($('<td>').append('Run').attr('id', "row_run_" + name))
+                            .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); confDevice(); return false;">Change</a>'))
+                            .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); delDeviceDlg(); return false;">Delete</a>'))
+                        );
+
+                    if (managerConfig['gpus_configs_list']) {
+                        managerConfig['gpus_configs_list'].forEach((item, index) => {
+                            let auto = 'Not';
+                            let running = 'Not';
+                            let run_stop = 'Run';
+                            if (managerConfig['autostart_gpus_list']) {
+                                if (managerConfig['autostart_gpus_list'].includes(item)) {
+                                    auto = 'Yes';
+                                    running = 'Yes';
+                                    run_stop = 'Stop';
+                                }
+                            }
+                            $('#devices').find('tbody')
+                                .append($('<tr>').attr('id', "row_" + (index + 2).toString())
+                                    .append($('<td>').append(index + 2))
+                                    .append($('<td>').append("GPU: " + (index + 1).toString()))
+                                    .append($('<td>').append(item))
+                                    .append($('<td>').append(auto))
+                                    .append($('<td>').append(running))
+                                    .append($('<td>').append('<a href="#" onclick="confDevice(this); return false;">'+run_stop+'</a>').attr('id', "row_run_" + name))
+                                    .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); confDevice(); return false;">Change</a>'))
+                                    .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); delDeviceDlg(); return false;">Delete</a>'))
+                                );
+                        })
+                    }
+
+                    if (managerConfig['streams']) {
+                        managerConfig['streams'].forEach((item, index) => {
+                            let auto = "Not";
+                            // console.log("autostart_streams", managerConfig['autostart_streams'] )
+                            if (managerConfig['autostart_streams']) {
+                                if (managerConfig['autostart_streams'].includes(item)) {
+                                    auto = 'Yes';
+                                }
+                            }
+                            $('#streams').find('tbody')
+                                .append($('<tr>').attr('id', "row_" + (index + 1).toString())
+                                    .append($('<td>').append(index + 1))
+                                    .append($('<td>').append(item))
+                                    .append($('<td>').append(auto))
+                                );
+
+                        });
+                    }
+                }
+            } catch (error) {
+                console.log(error);
+
+            }
+        }
+
+        function updateViewOk(jsonData) {
+            console.log("updateViewOk(jsonData) config page", jsonData['OK'][0], jsonData['OK'][1]);
+
+        }
+        $(document).ready(function () {
+            //getCamerasListAjax();
+            //addRow(['id','name','online','counting','comments','url','borders']);
+            if (wsCmd == null) { WebSocketCmd(); }
+            //getCamerasList();
+            getManagerData();
+        });
     </script>
 </head>
 <body>
     <div id="menu"></div>
     <h1 id="headMain"></h1>
     <div id="content">
+        <div class="card-header"><b>Devices</b></div>
+        <div class="card-body">
+            <table class="table text-center table-sm" id="devices">
+                <thead class="thead-dark">
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">ID</th>
+                        <th scope="col">Config</th>
+                        <!--<th scope="col">Started</th>-->
+                        <th scope="col">Autostart</th>
+                        <th scope="col">Running</th>
+                        <th scope="col">Run|Stop</th>
+                        <th scope="col">Edit</th>
+                        <th scope="col">Delete</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
 
-
-    </div>
+        <div class="card-header"><b>Streams</b> <a href='cameras.html'>Edit</a></div>
+        <div class="card-body">
+            <table class="table text-center table-sm" id="streams">
+                <thead class="thead-dark">
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">ID</th>
+                        <!--<th scope="col">Started</th>-->
+                        <th scope="col">Autostart</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div style="display:flex; justify-content:flex-end; margin-right: 20px;" >
+            <button type="button" class="btn btn-primary" data-dismiss="modal" onclick="saveToServer();">Save to Server</button>
+        </div>
+            </div>
 </body>
 </html>

@@ -64,6 +64,8 @@ function WebSocketCmd() {
                                switch (item) {
                                    case 'streamsConfigList': {
                                        console.log("cameras list updating...");
+                                       showToaster("<span style='color:blue'><b>Success!!!</b><br>Cameras list updated!!! </span>");
+
                                        localStorage.setItem('streamsConfigList', JSON.stringify(jsonData['streamsConfigList']));
                                        configViewUpdate('streamsConfigList');
                                        configViewUpdate('camsList');
@@ -71,11 +73,15 @@ function WebSocketCmd() {
                                        }
                                    case 'OK': {
                                        console.log("OK!", jsonData);
+                                       showToaster("<span style='color:blue'><b>Success!!!</b><br>" + jsonData["OK"][0] + "</span>");
+
+                                       // showToaster("Server said OK for " + jsonData["OK"][0]);
                                        updateViewOk(jsonData);
                                        break;
                                    }
                                    case 'error': {
-                                       // console.log("error!", jsonData);
+                                       showToaster("<span style='color:red'><b>Error!</b><br>" + jsonData["error"][0]+"</span>");
+                                       console.log("error!", jsonData);
                                        break;
                                    }
                                    case 'camsList': {
@@ -87,6 +93,7 @@ function WebSocketCmd() {
                                    case 'managerConfig': {
                                        console.log("!!!managerConfig data updating...", jsonData);
                                        localStorage.setItem('managerConfig', JSON.stringify(jsonData['managerConfig']));
+                                       configViewUpdate('managerConfig');
                                        break;
                                    }
                                    default: { // added brackets

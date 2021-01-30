@@ -86,7 +86,7 @@
 
         }
 
-        function getServerSata() {
+        function getServerData() {
             console.log('camsSelected()');
             var graph2d = 0;
             var dataset = 0;
@@ -266,10 +266,10 @@
                 timePicker: true,
                 startDate: moment().startOf('hour').subtract(24, 'hour'),
                 endDate: moment().startOf('hour'),
-                locale: { format: 'M/DD HH:mm' }
+                locale: { format: 'MM/DD HH:mm' }
             });
             getStreamsConfig();
-            getServerSata();
+            getServerData();
 
 
         });
@@ -280,92 +280,94 @@
     <div id="menu"></div>
     <h1 id="headMain"></h1>
     <br>
-    <div class="card">
-        <div class="card-header">Request to Database for data</div>
-        <div class="card-body">
-            <div id="dbRequest">
-                <form>
-                    <div class="input-group mb-auto">
-                        <div class="input-group w-50">
-                            <div class="input-group-prepend">
-                                <span class="input-group-text">Date range</span>
+    <div class="content">
+        <div class="card">
+            <div class="card-body">
+                <div id="dbRequest">
+                    <form>
+                        <b>Request to Database for data </b>
+                        <div class="input-group mb-auto">
+                            <div class="input-group w-50">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">Date range</span>
+                                </div>
+                                <input type="text" class="form-control" name="datetimes" id="queue_timeRange" />
                             </div>
-                            <input type="text" class="form-control" name="datetimes" id="queue_timeRange" />
-                        </div>
-                        <div class="input-group-prepend">
-                            <span class="input-group-text">Cameras</span>
-                        </div>
-                        <input type="text" class="form-control" id="queue_camera" value="All" onclick=" $('#camModalDisplay').modal('show');">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text">Cameras</span>
+                            </div>
+                            <input type="text" class="form-control" id="queue_camera" value="All" onclick=" $('#camModalDisplay').modal('show');">
 
-                        <!--<div class="input-group-prepend">
-        <span class="input-group-text">Border</span>
-    </div>
-    <input type="text" class="form-control" id="queue_border" value="">-->
+                            <!--<div class="input-group-prepend">
+                            <span class="input-group-text">Border</span>
+                        </div>
+                        <input type="text" class="form-control" id="queue_border" value="">-->
 
-                        <div class="input-group-prepend">
-                            <span class="input-group-text">In|Out</span>
+                            <div class="input-group-prepend">
+                                <span class="input-group-text">In|Out</span>
+                            </div>
+                            <select class="custom-select" id="addStream_inOut">
+                                <option selected value="0">Any</option>
+                                <option value="1">In</option>
+                                <option value="2">Out</option>
+                            </select>
+                            <div class="input-group-prepend">
+                                <span class="input-group-text">Interval (min)</span>
+                                <select class="custom-select" id="addStream_interval">
+                                    <option value="10">10</option>
+                                    <option value="15">15</option>
+                                    <option value="30">30</option>
+                                    <option selected value="60">60</option>
+                                    <option value="120">120</option>
+                                    <option value="180">180</option>
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="getServerData();">Get data</button>
                         </div>
-                        <select class="custom-select" id="addStream_inOut">
-                            <option selected value="0">Any</option>
-                            <option value="1">In</option>
-                            <option value="2">Out</option>
-                        </select>
-                        <div class="input-group-prepend">
-                            <span class="input-group-text">Interval (min)</span>
-                        </div>
-                        <select class="custom-select" id="addStream_interval">
-                            <option value="10">10</option>
-                            <option value="15">15</option>
-                            <option value="30">30</option>
-                            <option selected value="60">60</option>
-                            <option value="120">120</option>
-                            <option value="180">180</option>
-                        </select>
-                        <button type="button" class="btn btn-primary" onclick="getServerSata();">Get data</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <div>
+                <b>Total users in request</b>
+                <span class="badge badge-primary">In:<span id="in_users"></span></span>
+                <span class="badge badge-info">Out:<span id="out_users"></span></span>
+
+            </div>
+            <div id="visualization"></div>
+            <div class="card-body">
+                <table id="tableStat" class="display" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Border</th>
+                            <th>Camera</th>
+                            <th>In|Out</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                </table>
+                <div class="d-flex justify-content-center" id="alertInfo">
+                    <div class="spinner-border" role="status" id="spinner">
+                        <span class="sr-only">Loading...</span>
                     </div>
-                </form>
-            </div>
-        </div>
-    </div>
-    <div class="card">
-        <div>
-            <b>Total users in request</b>
-            <span class="badge badge-primary">In:<span id="in_users"></span></span>
-            <span class="badge badge-info">Out:<span id="out_users"></span></span>
-
-        </div>
-        <div id="visualization"></div>
-        <div class="card-body">
-            <table id="tableStat" class="display" style="width:100%">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Border</th>
-                        <th>Camera</th>
-                        <th>In|Out</th>
-                        <th>Time</th>
-                    </tr>
-                </thead>
-            </table>
-            <div class="d-flex justify-content-center" id="alertInfo">
-                <div class="spinner-border" role="status" id="spinner">
-                    <span class="sr-only">Loading...</span>
                 </div>
             </div>
         </div>
-    </div>
-    <!-- Modal Display-->
-    <div class="modal fade" id="camModalDisplay" tabindex="-1" role="dialog" aria-labelledby="ModalDisplay" aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="ModalDisplay">Select cameras<span id="result_image_stream_name"></span></h5>
-                </div>
-                <div class="modal-body">
-                    <form id="camsListSelect"></form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="camsSelected();">Close</button>
+        <!-- Modal Display-->
+        <div class="modal fade" id="camModalDisplay" tabindex="-1" role="dialog" aria-labelledby="ModalDisplay" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="ModalDisplay">Select cameras<span id="result_image_stream_name"></span></h5>
+                    </div>
+                    <div class="modal-body">
+                        <form id="camsListSelect"></form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="camsSelected();">Close</button>
+                    </div>
                 </div>
             </div>
         </div>

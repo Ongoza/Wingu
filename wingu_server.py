@@ -408,6 +408,7 @@ class Server:
             sql = 'SELECT * FROM hardware where time >= ' 
             if 'time_start' in params: time_start = str(params['time_start'])
             else: time_start = 1611751629
+            sql += str(time_start)
             if 'time_end' in params: sql += ' AND time < ' + str(params['time_end'])
             print('sql=', sql)
             async with aiosqlite.connect(self.db_path) as db:

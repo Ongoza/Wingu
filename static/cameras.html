@@ -218,7 +218,6 @@
         function delCamera() {
             console.log("Delete Camera: ", curCamId);
             $('#camModal').modal('hide');
-
             curCamId = null;
 
         }
@@ -349,7 +348,7 @@
 <body>
     <div id="menu"></div>
     <h1 id="headMain"></h1>
-    <div>
+    <div class="content">
         <div class="card">
             <div class="card-body">
                 <b>Hardware status: </b>
@@ -428,12 +427,13 @@
                             <img id="result_image_stream" src="" style="height:100%;width:100%;position: flex;">
                         </div>
                     </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="stopDisplayStream();">Close</button>
-                        </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="stopDisplayStream();">Close</button>
                     </div>
+                </div>
             </div>
         </div>
+    </div>
 
 </body>
 </html>

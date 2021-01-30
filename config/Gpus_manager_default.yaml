@@ -1,7 +1,6 @@
 autostart_gpus_list:
 - device0
 autostart_streams:
-- rr
 cpu_config: device0
 gpus_configs_list:
 - device0
