@@ -445,6 +445,7 @@ class Manager(threading.Thread):
     def kill(self):
         self.log.debug("GPUsmanager try to stop")
         self._stopevent.set()
+        nvidia_smi.nvmlShutdown()
         for id in list(self.gpusActiveList):
             try:
                 self.log.debug("GPUsmanager try stop gpu: "+ str(id))
