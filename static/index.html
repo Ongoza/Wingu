@@ -103,38 +103,23 @@
             request['time_end'] = $('#queue_timeRange').data('daterangepicker').endDate.unix()
             let interval_data = {}
             let form = $('#camsListSelect').find('input:checkbox:checked');
+            let streamsList = []
             if (form.length > 0) {
                 request['stream_id'] = []
-                let index2 = 0
                 form.each(function (index, value) {
                     let name = value.id.substring(10);
-                    // console.log("list", index, name);
                     request['stream_id'].push(name);
-                    interval_data[name + '_in'] = [];
-                    interval_data[name + '_out'] = [];
-                    groups.add({ id: index2, content: name + "_in", options: { drawPoints: { style: 'square' }, } });
-                    index2++;
-                    groups.add({ id: index2, content: name + '_out', options: { drawPoints: { style: 'circle' }, } });
-                    index2++;
-
+                    streamsList.push(name);
                 });
             } else {
                 let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
+                streamsList = Object.keys(streamsConfigList);
                 // console.log("streamsConfigList", typeof (streamsConfigList), streamsConfigList);
-                let index = 0;
-                for (var name in streamsConfigList) {
-                    interval_data[name + '_in'] = [];
-                    interval_data[name + '_out'] = [];
-                    groups.add({ id: index, content: name + "_in", options: { drawPoints: { style: 'square' }, } });
-                    index++;
-                    groups.add({ id: index, content: name + '_out', options: { drawPoints: { style: 'circle' }, } });
-                    index++;
-                }
             }
             if ($('#addStream_inOut').val() > 0) {
-                request['in_out'] = $('#addStream_inOut').val() - 1;
+                // request['in_out'] = $('#addStream_inOut').val() - 1;
             }
-            console.log("post request", request);
+            console.log("post request", request, streamsList);
             $.post("../statsJson", JSON.stringify(request), function (ans) {
                 let json = JSON.parse(ans);
                 $('#spinner').remove();
@@ -142,38 +127,30 @@
                     let in_users = 0;
                     let out_users = 0;
                     let data = json['getStats']
-                    let endInterval = request['time_start'] + interval;
                     let cnt = 0;
-                    let all_intervals = [[moment.unix(request['time_start']), []]];
-                    for (var name in interval_data) { all_intervals[cnt][1][name] = 0; }
-                    // console.log("data ready", all_intervals, all_intervals[0][1]);
+                    let index = 0;
+                    for (var i in streamsList) {
+                        groups.add({ id: index, content: streamsList[i] + "_in", options: { drawPoints: { style: 'square' }, } });
+                        index++;
+                        groups.add({ id: index, content: streamsList[i] + '_out', options: { drawPoints: { style: 'circle' }, } });
+                        index++;
+                    }
+                    console.log("data ready", data);
+                    var items = [];
                     $.each(data, function (i, item) {
-                        if (endInterval <= item[4]) {
-                            all_intervals.push([moment.unix(endInterval), []]);
-                            cnt++; endInterval += interval;
-                            for (var name in interval_data) { all_intervals[cnt][1][name] = 0; }
-                        }
+                        in_users += item[3]
+                        out_users += item[4]
                         item[0] = i + 1;
-                        if (item[3] == 0) {
-                            item[3] = 'In', in_users++;
-                            all_intervals[cnt][1][item[2] + '_in']++;
-                        } else {
-                            item[3] = 'Out', out_users++;
-                            all_intervals[cnt][1][item[2] + '_out']++;
-                        };
-                        item[4] = moment.unix(item[4]).format('MM/DD/YY HH:mm');
+                        item[5] = moment.unix(item[5]).format('MM/DD/YY HH:mm');
                         t.row.add(item).draw(true);
+                        group_id = (streamsList.indexOf(item[1]) * 2)
+                        console.log("group_id", group_id);
+                        items.push({ 'x': item[5], 'y': item[3], 'group': group_id });
+                        items.push({ 'x': item[5], 'y': item[4], 'group': group_id + 1 });
                     });
                     // console.log("data ready", all_intervals);
                     $('#in_users').text(in_users);
                     $('#out_users').text(out_users);
-                    var items = [];
-                    for (var i in all_intervals) {
-                        let tm = all_intervals[i][0];
-                        for (var label in all_intervals[i][1]) {
-                            items.push({ 'x': tm, 'y':all_intervals[i][1][label], 'group': label});
-                        }
-                    }
                     dataset = new vis.DataSet(items);
                     var container = document.getElementById('visualization');
                     graph2d = new vis.Graph2d(container, items, groups, options);
@@ -311,7 +288,7 @@
                                 <option value="1">In</option>
                                 <option value="2">Out</option>
                             </select>
-                            <div class="input-group-prepend">
+                            <!--<div class="input-group-prepend">
                                 <span class="input-group-text">Interval (min)</span>
                                 <select class="custom-select" id="addStream_interval">
                                     <option value="10">10</option>
@@ -321,7 +298,7 @@
                                     <option value="120">120</option>
                                     <option value="180">180</option>
                                 </select>
-                            </div>
+                            </div>-->
                             <button type="button" class="btn btn-primary" onclick="getServerData();">Get data</button>
                         </div>
                     </form>
@@ -341,9 +318,10 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Border</th>
                             <th>Camera</th>
-                            <th>In|Out</th>
+                            <th>Border</th>
+                            <th>In</th>
+                            <th>Out</th>
                             <th>Time</th>
                         </tr>
                     </thead>

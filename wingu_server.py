@@ -45,30 +45,33 @@ stats_data = [[1, "border1", "file_39", 1, 1611752111],[2, "border1", "file_39",
 
 class Server:
     def __init__(self):
-        #logging.getLogger().setLevel(logging.NOTSET)
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger().setLevel(logging.NOTSET)
+        #logging.getLogger().setLevel(logging.INFO)
         f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
 
         console = logging.StreamHandler(sys.stdout)
-        console.setLevel(logging.DEBUG)
+        console.setLevel(logging.INFO)
         console.setFormatter(f)
         logging.getLogger().addHandler(console)
 
         # Add file rotating handler, with level DEBUG
         fileLog = logging.handlers.RotatingFileHandler('sever.log', 'a', 100000, 5)
-        fileLog.setLevel(logging.DEBUG)
+        fileLog.setLevel(logging.INFO)
         fileLog.setFormatter(f)
         logging.getLogger().addHandler(fileLog)
 
         self.log = logging.getLogger('app')
 
         self.managerConfigFile = "default"
-        
+        self.hardware_timer = 120
+        self.stats_timer = 120
+        self.ws_timer = 2        
         self.db_path = "db.wingu.sqlite3"
-        self.init_db()
+        self.db_path_hw = "db.wingu_hardware.sqlite3"
 
+
+        self.init_dbs()
         self.live_streams = {}
-
         # route part
         self.routes = [
                 ('GET', '/',  self.Index),
@@ -105,9 +108,11 @@ class Server:
         self.app['websocketscmd'] = weakref.WeakSet()
         #  start cameras manager Object
         print("starting GPU manager")
+        self.app['manager'] = gpusManager.Manager(self.managerConfigFile)
+
+
         self.app.on_startup.append(self.start_background_tasks)
         self.app.on_cleanup.append(self.cleanup_background_tasks)
-        self.app['manager'] = gpusManager.Manager(self.managerConfigFile)
 
         self.log.info('Running...')
         web.run_app(self.app)
@@ -116,6 +121,7 @@ class Server:
         if 'manager' in self.app:
             self.app['manager'].kill()
         self.log.info('The server stopped!')
+
 
     async def saveConfig(self, ws, config):
         res = {'OK':["saveConfig", config['tp'], config['name'], config['autostart'], config['isNew']]}
@@ -192,7 +198,7 @@ class Server:
         ws = web.WebSocketResponse()
         await ws.prepare(request)
         request.app['websocketscmd'].add(ws)
-        await ws.send_json({"OK":["start sever", "event on init connection"] })
+        await ws.send_json({"OK":["start connection", "event on init connection"] })
         #totalFrames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
         async for msg in ws:
             if msg.type == WSMsgType.TEXT:
@@ -267,12 +273,12 @@ class Server:
             elif msg.type == WSMsgType.ERROR:
                 print('ws connection closed with exception %s' % ws.exception())
         # print('websocket connection closed')
-        if 'manager' in self.app:
-            try:
-                await self.app['manager'].stopGetStream(ws, "all")
-            except:
-                print("server exceptption on stopGetStream on close connection")
-                print(sys.exc_info())
+        #if 'manager' in self.app:
+        #    try:
+        #        await self.app['manager'].stopGetStream(ws, "all")
+        #    except:
+        #        print("server exceptption on stopGetStream on close connection")
+        #        print(sys.exc_info())
         self.removeLiveStreams(ws)
         request.app['websocketscmd'].remove(ws)
         return ws
@@ -362,10 +368,14 @@ class Server:
             print("websocket is not available for stream")
             self.removeLiveStream(ws, stream)
 
-    def init_db(self):
+    def init_dbs(self):
         loop = asyncio.new_event_loop()
         loop.run_until_complete(self.a_init_db())
         loop.close()
+
+        loop_hw = asyncio.new_event_loop()
+        loop_hw.run_until_complete(self.a_init_db_hw())
+        loop_hw.close()
 
     async def a_init_db(self):
         try:
@@ -373,31 +383,25 @@ class Server:
                 print("DB exist")
                 return
             async with aiosqlite.connect(self.db_path) as db:
-                 await db.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
-                 await db.execute('CREATE TABLE hardware (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, streams INTEGER, time INTEGER)')
-                 await db.execute('CREATE TABLE intersetions (id INTEGER PRIMARY KEY, border TEXT, stream_id TEXT, in_out INTEGER, time INTEGER)')
+                 await db.execute('CREATE TABLE intersections (id INTEGER PRIMARY KEY, stream_id TEXT, border TEXT, u_in INTEGER, u_out INTEGER, time INTEGER)')
                  await db.commit()
             print("DB created!")
         except:
             print("db is not ok")
 
-
-    async def save_statistic(self, cams):
-        cur_time = int(time.time())
-        # save stats cur time= 1611751629 {'file_39': array([{'border1': 1}], dtype=object)}
+    async def a_init_db_hw(self):
         try:
-            for i, (cam_id, data) in enumerate(cams.items()):
-                for items in data:
-                    for item in items:
-                        sql = f'INSERT INTO intersetions (border, stream_id, in_out, time) VALUES("{item}", "{cam_id}", {items[item]}, {cur_time})'
-                        print("sql", sql)
-                        async with aiosqlite.connect(self.db_path) as db:
-                            await db.execute(sql)
-                            await db.commit()
-                            print("save data ok")
+            if os.path.isfile(self.db_path_hw):
+                print("DB HW exist")
+                return
+            async with aiosqlite.connect(self.db_path_hw) as db:
+                 await db.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, login TEXT, email TEXT, password TEXT, time INTEGER)')
+                 await db.execute('CREATE TABLE hardware (id INTEGER PRIMARY KEY, device TEXT, cpu INTEGER, mem INTEGER, temp INTEGER, streams INTEGER, time INTEGER)')
+                 await db.commit()
+            print("DB HW created!")
         except:
-            print("error save data", cams)
-            print(sys.exc_info())
+            print("db hw is not ok")
+
 
     async def getStatsHardJson(self, request):
         print("request getStats")
@@ -411,7 +415,7 @@ class Server:
             sql += str(time_start)
             if 'time_end' in params: sql += ' AND time < ' + str(params['time_end'])
             print('sql=', sql)
-            async with aiosqlite.connect(self.db_path) as db:
+            async with aiosqlite.connect(self.db_path_hw) as db:
                 async with db.execute(sql) as cursor:
                     rows = await cursor.fetchall()
                     if rows: res = json.dumps({'getStatsHard':rows})
@@ -427,7 +431,7 @@ class Server:
         try:
             strText = await request.text()
             params = json.loads(strText)
-            sql = 'SELECT * FROM intersetions where time >= ' 
+            sql = 'SELECT * FROM intersections where time >= ' 
             if params:
                 if 'time_start' in params: time_start = str(params['time_start'])
                 else: time_start = 1611751629
@@ -446,10 +450,8 @@ class Server:
                         sql += ')' 
                     else:
                         sql += ' AND stream_id = "' + str(params['stream_id'][0])+'"'
-                if 'in_out' in params:
-                    sql += ' AND in_out = ' + str(params['in_out'])
             else: sql += str(1611751620)
-            sql += ' ORDER BY time'
+            # sql += ' ORDER BY time'
             print('sql=', sql)
             async with aiosqlite.connect(self.db_path) as db:
                 async with db.execute(sql) as cursor:
@@ -463,12 +465,12 @@ class Server:
             print(sys.exc_info())
 
     async def getStats(self, request):
-        print("request getStats")
         try:
+            print("request getStats")
             # request = {'time_start':1611751629}  params
             params = request.rel_url.query
             # print("Server get stats", params)
-            sql = 'SELECT * FROM intersetions where time >= ' 
+            sql = 'SELECT * FROM intersections where time >= ' 
             if params:
                 if 'time_start' in params: time_start = str(params['time_start'])
                 else: time_start = 1611751629
@@ -487,34 +489,54 @@ class Server:
             return web.json_response({"error":["getStats"]})
 
         #  background task 
-    async def background_process(self):
+    async def background_process_hardware(self):
         while True:
-            # self.log.debug('Run background task each 1 min')
-            try:
-                if 'manager' in self.app:
-                    try:
-                        stats = self.app['manager'].getCamsStat()
-                        # print("stats", stats)
-                        if stats:
-                            await self.save_statistic(stats)
-                    except:
-                        print("error save stats")
-                        print(sys.exc_info())
-                    if False:
-                        try:        
-                            hard = self.app['manager'].getHardwareStatus()
-                            cur_time = int(time.time())
-                            print("hard", hard)
-                            for item in hard:
-                                sql = f'INSERT INTO hardware (device, cpu, mem, temp, streams, time) VALUES("{item}", {hard[item][0]}, {hard[item][1]}, {hard[item][2]}, {hard[item][3]}, {cur_time})'
-                                print("sql", sql)
-                                async with aiosqlite.connect(self.db_path) as db:
+            print("hw tik")
+            if 'manager' in self.app:
+                try:        
+                    hard = self.app['manager'].getHardwareStatus()
+                    cur_time = int(time.time())
+                    print("hard", hard)
+                    for item in hard:
+                        sql = f'INSERT INTO hardware (device, cpu, mem, temp, streams, time) VALUES("{item}", {hard[item][0]}, {hard[item][1]}, {hard[item][2]}, {hard[item][3]}, {cur_time})'
+                        print("sql", sql)
+                        async with aiosqlite.connect(self.db_path_hw) as db:
+                            await db.execute(sql)
+                            await db.commit()
+                            print("save data ok")
+                except:
+                    print("error save hardStatus")
+                    print(sys.exc_info())
+            await asyncio.sleep(self.hardware_timer)
+
+    async def background_process_stats(self):
+        while True:
+            # print("stats tik")
+            if 'manager' in self.app:
+                try:        
+                    cams = self.app['manager'].getCamsStat()
+                    # print("stats", cams)                    
+                    if cams:
+                        # {'file_39': {'border1': [0, 0]}}
+                        cur_time = int(time.time())
+                        async with aiosqlite.connect(self.db_path) as db:
+                            for cam_id in cams:
+                                for border in cams[cam_id]:
+                                    # print("border", border, cams[cam_id][border])
+                                    sql = f'INSERT INTO intersections (stream_id, border, u_in, u_out, time) VALUES("{cam_id}", "{border}", {cams[cam_id][border][0]}, {cams[cam_id][border][1]}, {cur_time})'
+                                    # print("sql", sql)
                                     await db.execute(sql)
-                                    await db.commit()
-                                    print("save data ok")
-                        except:
-                            print("error save hardSatus")
-                            print(sys.exc_info())
+                                    await db.commit()                    
+                                    # print("save data ok")
+                except:
+                    print("error save Stats")
+                    print(sys.exc_info())
+            await asyncio.sleep(self.stats_timer)
+
+    async def background_process_ws(self):
+        while True:
+            # print("ws tik")
+            try:
                 if 'websocketscmd' in self.app:
                     if self.app['websocketscmd']:
                         if 'manager' in self.app:
@@ -529,15 +551,23 @@ class Server:
             except:
                 print('server loop Errror')
                 print(sys.exc_info())
-            await asyncio.sleep(1)
+            await asyncio.sleep(self.ws_timer)
 
     async def start_background_tasks(self, app):
-        app['dispatch'] = asyncio.create_task(self.background_process())
+        app['dispatch_ws'] = asyncio.create_task(self.background_process_ws())
+        app['dispatch_stats'] = asyncio.create_task(self.background_process_stats())
+        app['dispatch_hardware'] = asyncio.create_task(self.background_process_hardware())
+        print("bg is OK")
 
     async def cleanup_background_tasks(self, app):
-        print("start cleanup_background_tasks")
-        app['dispatch'].cancel()
-        await self.app['dispatch']
+        print("cleanup_background_tasks start")
+        app['dispatch_ws'].cancel()
+        await self.app['dispatch_ws']
+        app['dispatch_stats'].cancel()
+        await self.app['dispatch_stats']
+        app['dispatch_hardware'].cancel()
+        await self.app['dispatch_hardware']
+
 
 if __name__ == "__main__":
     try:

@@ -66,7 +66,10 @@ class VideoCapture:
         self.outFrame = np.array([])
         self.isDrow = False
         self.clients = []
-        self.intersections = []
+        self.out_color = (252, 35, 240)
+        self.in_color = (52, 235, 240)
+        self.text_color = (255, 255, 0)
+        self.intersections = {}
         self.save_video_res = None
         self.id = str(cam_id)
         self.device_id = device_id        
@@ -96,6 +99,9 @@ class VideoCapture:
                 self.isDrow = True
                 self.save_video_res = tuple(self.config['save_video_res'])
             self.borders = self.config['borders']
+            if self.borders:
+                for border in self.borders:
+                    self.intersections[border] = [0, 0]
             self.out = None
             if self.save_video_flag:            
                 outFile = self.config['save_path'] +"_"+ str(self.startTime)+".avi"
@@ -109,7 +115,6 @@ class VideoCapture:
             if self.encoder is not None:
                 self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", self.config['max_cosine_distance'], None))
                 print("VideoCapture stream tracker ok")
-                # self.cnt_people_in = {}
                 if not self.isFromFile:
                     self.q = VideoCaptureStream(self.url)
                 else:
@@ -148,8 +153,11 @@ class VideoCapture:
         return status
 
     def get_cur_stat(self):
-        res = self.intersections.copy()
-        self.intersections = []
+        res = {}
+        if self.borders:
+            for border in self.borders:
+                res[border] = [self.intersections[border][0], self.intersections[border][1]]
+                self.intersections[border] = [0, 0]
         return res 
 
     def get_cur_frame(self):
@@ -197,7 +205,7 @@ class VideoCapture:
     
     # Return true if line segments AB and CD intersect
     def track_intersection_angle(self,A,B):   
-        res = {}
+        res = 0
         for key in self.borders:
             C = np.array(self.borders[key][0])
             D = np.array(self.borders[key][1])
@@ -206,9 +214,12 @@ class VideoCapture:
                 v1 = np.array(D) - np.array(C)
                 angle = np.math.atan2(np.linalg.det([v0,v1]), np.dot(v0,v1))
                 if (angle > 0):
-                    res[key] = 1
+                    self.intersections[key][0] += 1
+                    res = 1
                 else:
-                    res[key] = 0
+                    self.intersections[key][1] += 1
+                    res = 2
+                print(self.intersections)
         return res
 
     def drawBorderLines(self, frame):
@@ -252,22 +263,20 @@ class VideoCapture:
                             continue 
                         xy = track.mean[:2].astype(np.int)# tuple(())
                         clr = (255, 255, 0) # default color
-                        track_name = str(track.track_id) # default name
+                        track_name = str(track.track_id) # default name                        
                         if(hasattr(track, 'xy')):
-                            lst_intrsc = self.track_intersection_angle(track.xy[0], xy)
-                            if lst_intrsc.keys():
-                                #border_line
-                                if(not hasattr(track, 'calculated')):
-                                    #cnt_people_in[track.track_id] = 0
-                                    track.calculated = "in_"
-                                    self.intersections.append(lst_intrsc)
-                                    track.color = (52, 235, 240)
-                                    self.log.debug("intersection!! "+ self.id)
-                                    res.append(lst_intrsc)
+                            if(not hasattr(track, 'calculated')):
+                                res = self.track_intersection_angle(track.xy[0], xy)
+                                if res > 0:
+                                    # cnt_people_in[track.track_id] = 0
+                                    track.calculated = str(res)+"_"
                                     track.cross_cnt = self.path_track
-                            if(hasattr(track, 'calculated')):
+                                    if res == 1: track.color = self.out_color
+                                    else: track.color = self.in_color
+                                    # self.log.debug("intersection!! "+ self.id)
+                            else:
                                 clr = track.color
-                                track_name = track.calculated  + track_name
+                                # track_name = track.calculated  + track_name
                                 track.cross_cnt -= 1
                                 if(track.cross_cnt < 1): track.state = 3 # delete from track list
                             track.xy.append(xy)
@@ -281,7 +290,7 @@ class VideoCapture:
                             cv2.circle(frame, txy, 5, clr, -1)
                             cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
                 self.drawBorderLines(frame)
-                cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, (255, 255, 0), 1)
+                cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, self.text_color, 1)
                 frame = cv2.resize(frame,self.save_video_res)
                 self.outFrame = np.copy(frame)
                 # print('self.outFrame', self.outFrame)
