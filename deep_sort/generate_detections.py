@@ -133,7 +133,7 @@ def generate_detections(encoder, mot_dir, output_dir, detection_dir=None):
     """Generate detections with features.
 
     Parameters
-    ----------
+    ----------generate_detections.py
     encoder : Callable[image, ndarray] -> ndarray
         The encoder function takes as input a BGR color image and a matrix of
         bounding boxes in format `(x, y, w, h)` and returns a matrix of

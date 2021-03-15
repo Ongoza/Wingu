@@ -64,7 +64,7 @@ function WebSocketCmd() {
                                switch (item) {
                                    case 'streamsConfigList': {
                                        console.log("cameras list updating...");
-                                       showToaster("<span style='color:blue'><b>Success!!!</b><br>Cameras list updated!!! </span>");
+                                       //showToaster("<span style='color:blue'><b>Success!!!</b><br>Cameras list updated!!! </span>");
 
                                        localStorage.setItem('streamsConfigList', JSON.stringify(jsonData['streamsConfigList']));
                                        configViewUpdate('streamsConfigList');

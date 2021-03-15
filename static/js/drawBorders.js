@@ -12,7 +12,7 @@ var tmp_config_borders = {}
 var drawBorders = {};
 var drawActiveBorder = null;
 var drawBorderCircleradius = 6;
-
+var cur_svg = null;
 var css = '.static {} .draggable {cursor: move;}',
     head = document.head || document.getElementsByTagName('head')[0],
     style = document.createElement('style');
@@ -47,35 +47,54 @@ function showImgBorders() {
         } else {
             isNotExist = true;
             tmp_config_borders = {};
-        }         
+        }
+    } else {
+        isNotExist = true;
     }
     if (isNotExist) {
-        //drawBorders = 
+        //drawBorders =
         if ($("#result_image").src != "" && $('#addStream_url').val() != "") {
             let fileCurVideoFilePath = $('#addStream_url').val();
-            // console.log(!(fileCurVideoFilePath in fileImgs), fileImgs);
+            console.log(!(fileCurVideoFilePath in fileImgs), fileImgs);
             if (!(fileCurVideoFilePath in fileImgs)) {
                 getFileImgAjax(fileCurVideoFilePath);
             }
-            
             if (curCamId != undefined) {
                 console.log("streamsConfigList[curCamId]['borders']", streamsConfigList[curCamId]['borders'])
                 drawBorders = streamsConfigList[curCamId]['borders'];
-                for (var key in drawBorders) {
-                    console.log("showImgBorders", key, drawBorders[key])
-                    let data = [
-                        [parseInt(drawBorders[key][0][0] * 1.3), drawBorders[key][0][1]],
-                        [parseInt(drawBorders[key][1][0] * 1.3), drawBorders[key][1][1]]
-                    ];
-                    console.log("data", data);
-                    drawNewBorder(key, data);
+                if (streamsConfigList[curCamId]['type'] == 1) {
+                    cur_svg = $("#fileSvgArea")[0];  
+                    console.log("start draw polyline");
+                } else {
+                    cur_svg = $("#fileSvg")[0];
+                    for (var key in drawBorders) {
+                        console.log("showImgBorders", key, drawBorders[key])
+                        let data = [
+                            [parseInt(drawBorders[key][0][0] * 1.3), drawBorders[key][0][1]],
+                            [parseInt(drawBorders[key][1][0] * 1.3), drawBorders[key][1][1]]
+                        ];
+                        console.log("data", data);
+                        drawNewBorder(key, data);
+                    }                    
+
                 }
                 console.log(drawBorders);
             } else {
-                console.log("new border"); 
+                console.log("new border");
             }
-            $('#fileModalImg').modal('show');
-            makeDraggable();
+            console.log("streamsConfigList[curCamId]['type'] ", streamsConfigList[curCamId]['type'] )
+            if (streamsConfigList[curCamId]['type'] == 1) {
+                console.log("start show draw polyline");
+                //console.log("src", fileImgs[fileCurVideoFilePath])
+                //$('#fileModalImgDivStaticArea').css("background-image", "url('" + fileImgs[fileCurVideoFilePath]+ "')");
+                $('#fileModalImgArea').modal('show');
+            } else {
+                console.log("src", $('#result_image').attr("src"))
+                //$('#fileModalImgDivStatic').css("background-image", "url('" + $('#result_image').attr("src").toString() + "')");
+                $('#fileModalImg').modal('show');
+            }
+            // console.log("fileModalImg", $('#fileModalImg'));
+            makeDraggable(streamsConfigList[curCamId]['type']);
         } else {
             console.log("Can not load Image!");
             //alert("Can not load Image!");
@@ -98,7 +117,8 @@ function getFileImgAjax() {
             var url = window.URL || window.webkitURL;
             fileImgs[filePath] = url.createObjectURL(data);
             $('#result_image').attr("src", fileImgs[filePath]);
-            $('#fileModalImgDiv').css("background-image", "url('" + fileImgs[filePath] + "')");
+            $('#fileModalImgDivStaticArea').css("background-image", "url('" + fileImgs[filePath] + "')");
+            $('#fileModalImgDivStatic').css("background-image", "url('" + fileImgs[filePath]+ "')");
         })
         .fail(function () { console.log("error get ajax"); })
         .always(function () { console.log("complete ajax request"); });
@@ -136,7 +156,8 @@ function fileCancelBorders() {
     drawBorders = {};
     drawActiveBorder = null;
     $('#fileSvg').empty();
-    $('#fileSvg').empty();
+    $('#fileSvgArea').empty();
+    cur_svg = null;
     $('#displayLineName').html('&nbsp;');
     $('#dtVerticalScroll tbody').empty();
 
@@ -209,7 +230,7 @@ function guidGenerator(len, list, cnt) {
     return res;
 }
 
-function drawNewLineSvg(svg, id, x1, y1, x2, y2, color) {
+function drawNewLineSvg(id, x1, y1, x2, y2, color) {
     var obj = document.createElementNS("http://www.w3.org/2000/svg", "line");
     obj.setAttributeNS(null, "x1", x1);
     obj.setAttributeNS(null, "y1", y1);
@@ -222,10 +243,10 @@ function drawNewLineSvg(svg, id, x1, y1, x2, y2, color) {
     obj.onclick = function () {
         setActiveBorder(id);
     };
-    svg.appendChild(obj);
+    cur_svg.appendChild(obj);
 }
 
-function drawNewRectSvg(svg, id, x, y, width, height, rot, color) {
+function drawNewRectSvg(id, x, y, width, height, rot, color) {
     var obj = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     obj.setAttributeNS(null, "x", x);
     obj.setAttributeNS(null, "y", y);
@@ -237,10 +258,11 @@ function drawNewRectSvg(svg, id, x, y, width, height, rot, color) {
     obj.setAttributeNS(null, "height", height);
     obj.setAttributeNS(null, "transform", 'rotate(' + rot.toString() + ' ' + x.toString() + ' ' + y.toString() + ')');
     obj.onclick = function () { setActiveBorder(id); };
-    svg.appendChild(obj);
+    cur_svg.appendChild(obj);
 }
 
-function drawNewCircleSvg(svg, id, cx, cy, color) {
+function drawNewCircleSvg(id, cx, cy, color) {
+    console.log("circle")
     var obj = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     obj.setAttributeNS(null, "cx", cx);
     obj.setAttributeNS(null, "cy", cy);
@@ -250,7 +272,7 @@ function drawNewCircleSvg(svg, id, cx, cy, color) {
     obj.setAttributeNS(null, "stroke", "blue");
     obj.setAttributeNS(null, "stroke-width", 1);
     obj.setAttributeNS(null, "fill", color);
-    svg.appendChild(obj);
+    cur_svg.appendChild(obj);
 }
 
 function setActiveBorder(id) {
@@ -271,15 +293,15 @@ function setActiveBorder(id) {
 function drawBorder(id, xy) {
     //xy = x1, y1, x2, y2
     // console.log("xy",xy);
-    let svg = $("#fileSvg")[0];
+    //let svg = $("#fileSvg")[0];
     let len = Math.floor(Math.sqrt(Math.pow(xy[1][0] - xy[0][0], 2) + Math.pow(xy[0][1] - xy[1][1], 2)));
     //let len = Math.floor(Math.sqrt(Math.pow(xy[2] - xy[0], 2) + Math.pow(xy[1] - xy[3], 2)));
     var angleDeg = Math.floor(Math.atan2(xy[1][1] - xy[0][1], xy[1][0] - xy[0][0]) * 180 / Math.PI) - 90;
-    drawNewRectSvg(svg, id.toString() + '_line_back', xy[0][0], xy[0][1], 6, len, angleDeg.toString(), "#ff0021");
-    drawNewLineSvg(svg, id.toString() + '_line', xy[0][0], xy[0][1], xy[1][0], xy[1][1], "#00ff21");
+    drawNewRectSvg(id.toString() + '_line_back', xy[0][0], xy[0][1], 6, len, angleDeg.toString(), "#ff0021");
+    drawNewLineSvg(id.toString() + '_line', xy[0][0], xy[0][1], xy[1][0], xy[1][1], "#00ff21");
     //drawNewLineSvg(svg, id.toString() + '_line_back', x1 - dist[1], y1 + dist[0], x2 - dist[1], y2 + dist[0], "#ff0021");
-    drawNewCircleSvg(svg, id.toString() + "_line_start", xy[0][0], xy[0][1], "#00ff21");
-    drawNewCircleSvg(svg, id.toString() + "_line_end", xy[1][0], xy[1][1], "#ff0021");
+    drawNewCircleSvg(id.toString() + "_line_start", xy[0][0], xy[0][1], "#00ff21");
+    drawNewCircleSvg(id.toString() + "_line_end", xy[1][0], xy[1][1], "#ff0021");
 }
 
 function drawNewBorder(name, data) {
@@ -325,25 +347,29 @@ function delActiveBorder() {
 }
 
 
-function makeDraggable() {
-    console.log("makeDraggable");
+function makeDraggable(type=0) {
+    console.log("makeDraggable!");
     let LongLine, LongLine2, startOrNot;
     // var svg = document.getElementById("fileSvg");
-    let svg = $("#fileSvg")[0];
-    svg.addEventListener('mousedown', startDrag);
-    svg.addEventListener('mousemove', drag);
-    svg.addEventListener('mouseup', endDrag);
-    svg.addEventListener('mouseleave', endDrag);
-    svg.addEventListener('touchstart', startDrag);
-    svg.addEventListener('touchmove', drag);
-    svg.addEventListener('touchend', endDrag);
-    svg.addEventListener('touchleave', endDrag);
-    svg.addEventListener('touchcancel', endDrag);
-    var selectedElement, offset, transform;
+    console.log("svg", cur_svg)
+    if (type == 1) {
+        drawNewCircleSvg("test", 10, 19, "#00ff21");
 
+    } else {
+        cur_svg.addEventListener('mousedown', startDrag);
+        cur_svg.addEventListener('mousemove', drag);
+        cur_svg.addEventListener('mouseup', endDrag);
+        cur_svg.addEventListener('mouseleave', endDrag);
+        cur_svg.addEventListener('touchstart', startDrag);
+        cur_svg.addEventListener('touchmove', drag);
+        cur_svg.addEventListener('touchend', endDrag);
+        cur_svg.addEventListener('touchleave', endDrag);
+        cur_svg.addEventListener('touchcancel', endDrag);
+        var selectedElement, offset, transform;
+    }
     function getMousePosition(evt) {
-        // console.log("getMousePosition");
-        var CTM = svg.getScreenCTM();
+        console.log("getMousePosition");
+        var CTM = cur_svg.getScreenCTM();
         if (evt.touches) { evt = evt.touches[0]; }
         return {
             x: (evt.clientX - CTM.e) / CTM.a,
@@ -352,7 +378,7 @@ function makeDraggable() {
     }
 
     function startDrag(evt) {
-        // console.log("Start Drag")
+        console.log("Start Drag")
         if (evt.target.classList.contains('draggable')) {
             selectedElement = evt.target;
             //console.log("evt.target", evt.target.id);
@@ -365,18 +391,21 @@ function makeDraggable() {
             offset = getMousePosition(evt);
             transforms = selectedElement.transform.baseVal;
             if (transforms.length === 0 || transforms.getItem(0).type !== SVGTransform.SVG_TRANSFORM_TRANSLATE) {
-                var translate = svg.createSVGTransform();
+                var translate = cur_svg.createSVGTransform();
                 translate.setTranslate(0, 0);
                 selectedElement.transform.baseVal.insertItemBefore(translate, 0);
             }
             transform = transforms.getItem(0);
             offset.x -= transform.matrix.e;
             offset.y -= transform.matrix.f;
+        } else {
+            console.log("Start create new point for area border")
+
         }
     }
 
     function drag(evt) {
-        // console.log("drag function")
+        //console.log("drag function")
         if (selectedElement) {
             evt.preventDefault();
             var coord = getMousePosition(evt);
@@ -409,6 +438,7 @@ function makeDraggable() {
     }
 
     function endDrag(evt) {
+        console.log("mouseup")
         if (LongLine) {
             //console.log(evt, LongLine);
             let x1 = parseInt(LongLine.getAttribute('x1'));
@@ -421,6 +451,8 @@ function makeDraggable() {
             selectedElement = false;
             LongLine = null;
             LongLine2 = null;
+        } else {
+            console.log("mouseup create new point")
         }
     }
 }

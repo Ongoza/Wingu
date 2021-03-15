@@ -29,7 +29,7 @@ import gpusManager
 
 camerasListData = {'cameras': [['id','name','online','counting','comments','url','borders'],['2','name2','online2','counting2','comments2','url2','borders2']]}
 
-test_manager_config = {'managerConfig': {'cpu_config': 'device0', 'autostart_gpus_list': None, 'gpus_configs_list': ['device0', 'device1'], 'autotart_streams': None, 'streams': ['file_39', 'file_43'] }, 
+test_manager_config = {'managerConfig': {'cpu_config': 'device0', 'autostart_gpus_list': None, 'gpus_configs_list': ['device0', 'device1'], 'autostart_streams': None, 'streams': ['file_39', 'file_43'] },
                         'gpusConfigList': {'cpu': {'id': 0, "device_name":"CPU",  'batch_size': 32, 'img_size': 416, 'detector_name': 'yolov4', 'detector_filename': 'yolov4.h5', 'yolo_max_boxes': 100, 'yolo_iou_threshold': 0.5, 'yolo_score_threshold': 0.5}}, 
                         }
 
@@ -45,8 +45,8 @@ stats_data = [[1, "border1", "file_39", 1, 1611752111],[2, "border1", "file_39",
 
 class Server:
     def __init__(self):
-        logging.getLogger().setLevel(logging.NOTSET)
-        #logging.getLogger().setLevel(logging.INFO)
+        #logging.getLogger().setLevel(logging.NOTSET)
+        logging.getLogger().setLevel(logging.INFO)
         f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
 
         console = logging.StreamHandler(sys.stdout)
@@ -55,7 +55,7 @@ class Server:
         logging.getLogger().addHandler(console)
 
         # Add file rotating handler, with level DEBUG
-        fileLog = logging.handlers.RotatingFileHandler('sever.log', 'a', 100000, 5)
+        fileLog = logging.handlers.RotatingFileHandler('sever.log', 'a', 1000000, 5)
         fileLog.setLevel(logging.INFO)
         fileLog.setFormatter(f)
         logging.getLogger().addHandler(fileLog)
@@ -63,8 +63,8 @@ class Server:
         self.log = logging.getLogger('app')
 
         self.managerConfigFile = "default"
-        self.hardware_timer = 120
-        self.stats_timer = 120
+        self.hardware_timer = 300
+        self.stats_timer = 300
         self.ws_timer = 2        
         self.db_path = "db.wingu.sqlite3"
         self.db_path_hw = "db.wingu_hardware.sqlite3"
@@ -420,9 +420,12 @@ class Server:
                     rows = await cursor.fetchall()
                     if rows: res = json.dumps({'getStatsHard':rows})
                     else: res = json.dumps({'getStatsHard':[]})
+            with open('dataHard.json', 'w') as f: json.dump({'getStatsHard':rows}, f)
+            print("rows", rows)
             return web.json_response(res)
         except:
             return web.json_response({"error":["getStatsHardJson"]})
+            print("rows errr!!!!")
             print(sys.exc_info())
 
 
@@ -461,8 +464,8 @@ class Server:
                     else: res = json.dumps({'getStats':[]})
             return web.json_response(res)
         except:
-            return web.json_response({"error":["getStatsJson"]})
             print(sys.exc_info())
+            return web.json_response({"error":["getStatsJson"]})
 
     async def getStats(self, request):
         try:
@@ -497,13 +500,13 @@ class Server:
                     hard = self.app['manager'].getHardwareStatus()
                     cur_time = int(time.time())
                     print("hard", hard)
-                    for item in hard:
-                        sql = f'INSERT INTO hardware (device, cpu, mem, temp, streams, time) VALUES("{item}", {hard[item][0]}, {hard[item][1]}, {hard[item][2]}, {hard[item][3]}, {cur_time})'
-                        print("sql", sql)
-                        async with aiosqlite.connect(self.db_path_hw) as db:
+                    async with aiosqlite.connect(self.db_path_hw) as db:
+                        for item in hard:
+                            sql = f'INSERT INTO hardware (device, cpu, mem, temp, streams, time) VALUES("{item}", {hard[item][0]}, {hard[item][1]}, {hard[item][2]}, {hard[item][3]}, {cur_time})'
+                            # print("sql", sql)
                             await db.execute(sql)
                             await db.commit()
-                            print("save data ok")
+                            #print("save data ok")
                 except:
                     print("error save hardStatus")
                     print(sys.exc_info())

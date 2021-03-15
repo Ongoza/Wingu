@@ -39,10 +39,10 @@ writeVideo_flag = True
 root_dir = os.getcwd()
 # detector section
 # model_def = "utils/yolov3.cfg"
-model_def = "models/yolov3-tiny.cfg"
+model_def = "models/yolov3.cfg"
 
 # weights_path = "Model_data/yolov3.weights"
-weights_path = "models/yolov3-tiny.weights"
+weights_path = "models/yolov3.weights"
 
 # wget -c https://pjreddie.com/media/files/yolov3.weights
 conf_thres = 0.5

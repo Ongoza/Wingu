@@ -35,7 +35,7 @@
         var curCamId = null;
         var curQeuensDisplay = [];
         var divNewCameraData = null;
-
+        //var isModal = true;
         function getDivNewCamera() {
             var divNewCamera = document.createElement('div');
             divNewCamera.id = 'divNewCamera';
@@ -56,7 +56,7 @@
                 console.log("updateViewOk(jsonData) 2", jsonData['OK'][1]);
                 //.append('<a href="#" onclick="runCamera(this); return false;">Run</a>').attr('id', "row_run_" + name))
                 // onclick = "runCamera(this); return false;"
-                $('#row_run_' + jsonData["OK"][1]).first().html('<a href="#" onclick="runCamera(this); return false;" >Run</a>'); // .bind("click", event);
+                $('#row_run_' + jsonData["OK"][1]).first().html('<a href="#" onclick="event.preventDefault(); runCamera(this); return false;" >Run</a>'); // .bind("click", event);
 
             }
 
@@ -107,6 +107,8 @@
 
         }
         function runCamera(e) {
+            console.log("runCamera", e)
+            // e.preventDefault();
             let id = e.parentElement.parentElement.id.slice(4);
             console.log("runCamera", id);
             //e.innerHTML = "Running";
@@ -116,45 +118,48 @@
 
         function configViewUpdate(typeConfig) {
             // console.log("start configViewUpdate()", typeConfig)
-            try {
-                if (typeConfig == 'streamsConfigList') {
-                    if (localStorage.getItem('streamsConfigList') != null) {
-                        $('#camerasTable').find('tbody').empty();
-                        let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
-                        // console.log("streamsConfigList", typeof (streamsConfigList), streamsConfigList);
-                        for (var name in streamsConfigList) {
+                try {
+                    if (typeConfig == 'streamsConfigList') {
+                        if (localStorage.getItem('streamsConfigList') != null) {
+                            $('#camerasTable').find('tbody').empty();
+                            let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
+                            // console.log("streamsConfigList", typeof (streamsConfigList), streamsConfigList);
+                            for (var name in streamsConfigList) {
 
-                            addRow(name, streamsConfigList[name]);
-                        };
-                        //let gpusConfigList = JSON.parse(localStorage.getItem('gpusConfigList'));
-                        //let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
-                        //console.log("managerConfig", typeof (managerConfig), managerConfig);
-                        //console.log("gpusConfigList", typeof (gpusConfigList), gpusConfigList);
+                                addRow(name, streamsConfigList[name]);
+                            };
+                            //let gpusConfigList = JSON.parse(localStorage.getItem('gpusConfigList'));
+                            //let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
+                            //console.log("managerConfig", typeof (managerConfig), managerConfig);
+                            //console.log("gpusConfigList", typeof (gpusConfigList), gpusConfigList);
 
+                        } else {
+                            console.log("Config is not ready!!");
+                        }
+                    } else if (typeConfig == 'camsList') {
+                       // if (isModal === false){
+                            // console.log("start camsList", typeConfig)
+                            $('#runningStreams').find('tbody').empty();
+                            if (localStorage.getItem('camsList') != null) {
+                                let camsList = JSON.parse(localStorage.getItem('camsList'));
+                                // console.log("camsList", typeof (camsList), camsList);
+                                for (var i in camsList) {
+                                    addRowRunning(i, camsList[i]);
+                                };
+                            } else {
+                                console.log("Config is not ready!!");
+
+                         //   }
+                        }
                     } else {
-                        console.log("Config is not ready!!");
-                    }
-                } else if (typeConfig == 'camsList') {
-                    // console.log("start camsList", typeConfig)
-                    $('#runningStreams').find('tbody').empty();
-                    if (localStorage.getItem('camsList') != null) {
-                        let camsList = JSON.parse(localStorage.getItem('camsList'));
-                        // console.log("camsList", typeof (camsList), camsList);
-                        for (var i in camsList) {
-                            addRowRunning(i, camsList[i]);
-                        };
-                    } else {
-                        console.log("Config is not ready!!");
+                        console.log("wrong type config!!");
 
                     }
-                } else {
-                    console.log("wrong type config!!");
+                } catch (error) {
+                    console.log(error);
 
                 }
-            } catch (error) {
-                console.log(error);
 
-            }
         }
 
         function confCameraNew() {
@@ -170,6 +175,7 @@
 
         function confCamera() {
             // console.log(e);
+            isModal = true;
             console.log("Camera: ", curCamId);
             let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
             let managerConfig = JSON.parse(localStorage.getItem('managerConfig'));
@@ -292,7 +298,7 @@
                     .append($('<td>').append(data['save_path']))
                     .append($('<td>').append(isSave))
                     .append($('<td>').append(Object.keys(data['borders']).length))
-                    .append($('<td>').append('<a href="#" onclick="runCamera(this); return false;">Run</a>').attr('id', "row_run_" + name))
+                    .append($('<td>').append('<a href="#" onclick="event.preventDefault(); runCamera(this); return false;">Run</a>').attr('id', "row_run_" + name))
                     .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); confCamera(); return false;">Change</a>'))
                     .append($('<td>').append('<a href="#" onclick="curCamId = this.parentElement.parentElement.id.slice(4); delCameraDlg(); return false;">Delete</a>'))
                 );
@@ -342,7 +348,10 @@
             getStreamsConfig();
             getManagerData();
             showCamList();
-            $.get('camera.html', function (data) { divNewCameraData = data; }); });
+            $.get('camera_div.html', function (data) {
+            divNewCameraData = data;
+            //console.log("data", data);
+            }); });
     </script>
 </head>
 <body>
@@ -433,6 +442,7 @@
                 </div>
             </div>
         </div>
+
     </div>
 
 </body>

@@ -10,8 +10,8 @@
     <script src="lib/jquery-3.5.1.min.js"></script>
     <script src="lib/moment.min.js"></script>
     <script src="lib/bootstrap.min.js"></script>
-    <link href="lib/vis-timeline-graph2d.min.css" rel="stylesheet" type="text/css" />
-    <script src="lib/vis-timeline-graph2d.min.js"></script>
+    <link rel="stylesheet" href="lib/uPlot.min.css">
+    <script src="lib/uPlot.iife.min.js"></script>
     <script src="lib/daterangepicker.js"></script>
     <link rel="stylesheet" href="lib/daterangepicker.css">
 
@@ -26,55 +26,40 @@
     <script type="text/javascript">
         // =============================================================
         // create a dataSet with groups
+        const transpose = (matrix) => {
+            let [row] = matrix;
+            let res = row.map((value, column) => matrix.map(row => { return row[column]; }));
+            return res;
+        }
 
-        var options = {
-            dataAxis: {
-                showMinorLabels: false,
-                right: {
-                    title: {
-                        text: 'Title (right axis)'
-                    }
+        let opts = {
+            title: "Default",
+            id: "chart1",
+            class: "my-chart",
+            width: 900,
+            height: 300,
+            series: [
+                {},
+                {
+                    show: true,
+                    spanGaps: false,
+                    label: "In",
+                    value: (self, rawValue) => rawValue.toFixed(0),
+                    stroke: "red",
+                    width: 2,
+                },
+                {
+                    show: true,
+                    spanGaps: false,
+                    label: "Out",
+                    value: (self, rawValue) => rawValue.toFixed(0),
+                    stroke: "blue",
+                    width: 2,
                 }
-            },
-            legend: { left: { position: "bottom-left" } },
-            //start: '2014-06-09',
-            //end: '2014-07-03'
+            ],
         };
 
 
-        function showIcons(show) {
-            graph2d.setOptions({ dataAxis: { icons: show } });
-        }
-
-        function showTitle(axis, show) {
-            var title;
-            if (show == true) {
-                title = { text: "Title (" + axis + " axis)" };
-            }
-            else {
-                title = { text: undefined };
-            }
-
-            if (axis == 'left') {
-                graph2d.setOptions({ dataAxis: { left: { title: title } } });
-            }
-            else {
-                graph2d.setOptions({ dataAxis: { right: { title: title } } });
-            }
-        }
-
-        var colors = ['red', 'green', 'blue', 'black', 'yellow', 'purple', 'pink'];
-        function styleTitle(axis) {
-            var title;
-            title = { style: "color: " + colors[Math.floor(Math.random() * colors.length) + 1] };
-
-            if (axis == 'left') {
-                graph2d.setOptions({ dataAxis: { left: { title: title } } });
-            }
-            else {
-                graph2d.setOptions({ dataAxis: { right: { title: title } } });
-            }
-        }
         //===========================================================
         function camsSelected() {
             let form = $('#camsListSelect').find('input:checkbox:checked');
@@ -88,78 +73,64 @@
 
         function getServerData() {
             console.log('camsSelected()');
-            var graph2d = 0;
-            var dataset = 0;
-            var graph2d = 0;
             $('#visualization').empty();
             let request = {};
             let t = $('#tableStat').DataTable();
             t.clear().draw();
             // var container = $('#visualization').append('<div></div>').attr('id', 'containerVis');
-            var groups = new vis.DataSet();
             let interval = parseInt($('#addStream_interval').val()) * 60
             console.log("interval", interval)
             request['time_start'] = $('#queue_timeRange').data('daterangepicker').startDate.unix()
             request['time_end'] = $('#queue_timeRange').data('daterangepicker').endDate.unix()
-            let interval_data = {}
             let form = $('#camsListSelect').find('input:checkbox:checked');
             let streamsList = []
             if (form.length > 0) {
-                request['stream_id'] = []
-                form.each(function (index, value) {
-                    let name = value.id.substring(10);
-                    request['stream_id'].push(name);
-                    streamsList.push(name);
-                });
+                form.each(function (index, value) { streamsList.push(value.id.substring(10)); });
             } else {
                 let streamsConfigList = JSON.parse(localStorage.getItem('streamsConfigList'));
                 streamsList = Object.keys(streamsConfigList);
-                // console.log("streamsConfigList", typeof (streamsConfigList), streamsConfigList);
             }
-            if ($('#addStream_inOut').val() > 0) {
-                // request['in_out'] = $('#addStream_inOut').val() - 1;
-            }
-            console.log("post request", request, streamsList);
-            $.post("../statsJson", JSON.stringify(request), function (ans) {
-                let json = JSON.parse(ans);
-                $('#spinner').remove();
-                if (json.hasOwnProperty('getStats')) {
-                    let in_users = 0;
-                    let out_users = 0;
-                    let data = json['getStats']
-                    let cnt = 0;
-                    let index = 0;
-                    for (var i in streamsList) {
-                        groups.add({ id: index, content: streamsList[i] + "_in", options: { drawPoints: { style: 'square' }, } });
-                        index++;
-                        groups.add({ id: index, content: streamsList[i] + '_out', options: { drawPoints: { style: 'circle' }, } });
-                        index++;
+            let exmpl = '{"getStats": [[10702, "cherk_left", "border1", 2, 0, 1613066626], [10705, "cherk_left", "border1", 0, 1, 1613066926], [10708, "cherk_left", "border1", 4, 1, 1613067227], [10711, "cherk_left", "border1", 2, 2, 1613067527], [10714, "cherk_left", "border1", 1, 2, 1613067827], [10717, "cherk_left", "border1", 1, 0, 1613068128], [10720, "cherk_left", "border1", 4, 0, 1613068428], [10723, "cherk_left", "border1", 0, 1, 1613068728], [10726, "cherk_left", "border1", 2, 0, 1613069029], [10729, "cherk_left", "border1", 4, 2, 1613069329], [10732, "cherk_left", "border1", 0, 1, 1613069629], [10735, "cherk_left", "border1", 0, 1, 1613069929], [10738, "cherk_left", "border1", 1, 0, 1613070229], [10741, "cherk_left", "border1", 2, 1, 1613070530], [10744, "cherk_left", "border1", 2, 1, 1613070830], [10747, "cherk_left", "border1", 6, 0, 1613071130], [10750, "cherk_left", "border1", 0, 1, 1613071431], [10753, "cherk_left", "border1", 3, 1, 1613071731], [10756, "cherk_left", "border1", 0, 0, 1613072031], [10759, "cherk_left", "border1", 0, 0, 1613072331], [10762, "cherk_left", "border1", 0, 0, 1613072631], [10765, "cherk_left", "border1", 0, 0, 1613072931], [10768, "cherk_left", "border1", 0, 0, 1613073232], [10771, "cherk_left", "border1", 0, 0, 1613073532], [10774, "cherk_left", "border1", 0, 0, 1613073832], [10777, "cherk_left", "border1", 0, 0, 1613074133], [10780, "cherk_left", "border1", 0, 0, 1613074433], [10783, "cherk_left", "border1", 0, 0, 1613074733], [10786, "cherk_left", "border1", 0, 0, 1613075034], [10789, "cherk_left", "border1", 0, 0, 1613075334], [10792, "cherk_left", "border1", 0, 0, 1613075634], [10795, "cherk_left", "border1", 0, 0, 1613075935], [10798, "cherk_left", "border1", 0, 0, 1613076235], [10801, "cherk_left", "border1", 0, 0, 1613076535], [10804, "cherk_left", "border1", 0, 0, 1613076836], [10807, "cherk_left", "border1", 0, 0, 1613077136], [10810, "cherk_left", "border1", 0, 0, 1613077436], [10813, "cherk_left", "border1", 0, 0, 1613077736], [10816, "cherk_left", "border1", 0, 0, 1613078036], [10819, "cherk_left", "border1", 0, 0, 1613078336], [10822, "cherk_left", "border1", 0, 0, 1613078637], [10825, "cherk_left", "border1", 0, 0, 1613078937], [10828, "cherk_left", "border1", 0, 0, 1613079237], [10831, "cherk_left", "border1", 0, 0, 1613079537], [10834, "cherk_left", "border1", 0, 0, 1613079838], [10837, "cherk_left", "border1", 0, 0, 1613080138], [10840, "cherk_left", "border1", 0, 0, 1613080438], [10843, "cherk_left", "border1", 0, 0, 1613080738], [10846, "cherk_left", "border1", 0, 0, 1613081039], [10849, "cherk_left", "border1", 0, 0, 1613081339], [10852, "cherk_left", "border1", 0, 0, 1613081640], [10855, "cherk_left", "border1", 0, 0, 1613081940], [10858, "cherk_left", "border1", 0, 0, 1613082240], [10861, "cherk_left", "border1", 0, 0, 1613082540], [10864, "cherk_left", "border1", 0, 0, 1613082840], [10867, "cherk_left", "border1", 0, 0, 1613083140], [10870, "cherk_left", "border1", 0, 0, 1613083441], [10873, "cherk_left", "border1", 0, 0, 1613083741], [10876, "cherk_left", "border1", 0, 0, 1613084041], [10879, "cherk_left", "border1", 0, 0, 1613084342], [10882, "cherk_left", "border1", 0, 0, 1613084642], [10885, "cherk_left", "border1", 1, 0, 1613084942], [10888, "cherk_left", "border1", 2, 1, 1613085243], [10891, "cherk_left", "border1", 0, 0, 1613085543], [10894, "cherk_left", "border1", 0, 0, 1613085843], [10897, "cherk_left", "border1", 0, 0, 1613086143], [10900, "cherk_left", "border1", 0, 0, 1613086444], [10903, "cherk_left", "border1", 0, 0, 1613086744], [10906, "cherk_left", "border1", 0, 0, 1613087044], [10909, "cherk_left", "border1", 0, 0, 1613087345], [10912, "cherk_left", "border1", 0, 0, 1613087645], [10915, "cherk_left", "border1", 0, 0, 1613087946], [10918, "cherk_left", "border1", 0, 0, 1613088246], [10921, "cherk_left", "border1", 0, 0, 1613088546], [10924, "cherk_left", "border1", 0, 0, 1613088846], [10927, "cherk_left", "border1", 0, 0, 1613089146], [10930, "cherk_left", "border1", 0, 0, 1613089446], [10933, "cherk_left", "border1", 0, 0, 1613089746], [10936, "cherk_left", "border1", 0, 0, 1613090046], [10939, "cherk_left", "border1", 0, 0, 1613090346], [10942, "cherk_left", "border1", 0, 0, 1613090646], [10945, "cherk_left", "border1", 0, 0, 1613090947], [10948, "cherk_left", "border1", 0, 0, 1613091247], [10951, "cherk_left", "border1", 0, 0, 1613091547], [10954, "cherk_left", "border1", 0, 0, 1613091848], [10957, "cherk_left", "border1", 0, 0, 1613092148], [10960, "cherk_left", "border1", 0, 0, 1613092448], [10963, "cherk_left", "border1", 0, 0, 1613092749], [10966, "cherk_left", "border1", 0, 0, 1613093049], [10969, "cherk_left", "border1", 0, 0, 1613093349], [10972, "cherk_left", "border1", 0, 0, 1613093649], [10975, "cherk_left", "border1", 0, 0, 1613093949], [10978, "cherk_left", "border1", 0, 0, 1613094250], [10981, "cherk_left", "border1", 0, 0, 1613094550], [10984, "cherk_left", "border1", 0, 0, 1613094851], [10987, "cherk_left", "border1", 0, 0, 1613095151], [10990, "cherk_left", "border1", 0, 0, 1613095451], [10993, "cherk_left", "border1", 0, 0, 1613095751], [10996, "cherk_left", "border1", 0, 0, 1613096052], [10999, "cherk_left", "border1", 1, 0, 1613096352], [11002, "cherk_left", "border1", 0, 0, 1613096652], [11005, "cherk_left", "border1", 0, 0, 1613096953], [11008, "cherk_left", "border1", 0, 0, 1613097253], [11011, "cherk_left", "border1", 0, 0, 1613097553], [11014, "cherk_left", "border1", 0, 0, 1613097853], [11017, "cherk_left", "border1", 1, 0, 1613098154], [11020, "cherk_left", "border1", 0, 0, 1613098454], [11023, "cherk_left", "border1", 0, 0, 1613098755], [11026, "cherk_left", "border1", 0, 0, 1613099055], [11029, "cherk_left", "border1", 0, 0, 1613099356], [11032, "cherk_left", "border1", 0, 0, 1613099656], [11035, "cherk_left", "border1", 0, 0, 1613099956], [11038, "cherk_left", "border1", 0, 0, 1613100256], [11041, "cherk_left", "border1", 0, 0, 1613100557], [11044, "cherk_left", "border1", 0, 0, 1613100857], [11047, "cherk_left", "border1", 0, 0, 1613101157], [11050, "cherk_left", "border1", 0, 0, 1613101458], [11053, "cherk_left", "border1", 0, 0, 1613101758], [11056, "cherk_left", "border1", 0, 0, 1613102058], [11059, "cherk_left", "border1", 0, 0, 1613102358], [11062, "cherk_left", "border1", 0, 0, 1613102658], [11065, "cherk_left", "border1", 0, 0, 1613102959], [11068, "cherk_left", "border1", 0, 0, 1613103259], [11071, "cherk_left", "border1", 0, 0, 1613103559], [11074, "cherk_left", "border1", 0, 0, 1613103860], [11077, "cherk_left", "border1", 0, 0, 1613104160], [11080, "cherk_left", "border1", 0, 0, 1613104460], [11083, "cherk_left", "border1", 0, 0, 1613104761], [11086, "cherk_left", "border1", 0, 0, 1613105061], [11089, "cherk_left", "border1", 0, 0, 1613105361], [11092, "cherk_left", "border1", 0, 0, 1613105662], [11095, "cherk_left", "border1", 0, 0, 1613105962], [11098, "cherk_left", "border1", 0, 0, 1613106262], [11101, "cherk_left", "border1", 0, 0, 1613106562], [11104, "cherk_left", "border1", 0, 0, 1613106863], [11107, "cherk_left", "border1", 0, 0, 1613107163], [11110, "cherk_left", "border1", 0, 0, 1613107463], [11113, "cherk_left", "border1", 0, 0, 1613107763], [11116, "cherk_left", "border1", 0, 0, 1613108063], [11119, "cherk_left", "border1", 0, 0, 1613108364], [11122, "cherk_left", "border1", 0, 0, 1613108664], [11125, "cherk_left", "border1", 2, 2, 1613108964], [11128, "cherk_left", "border1", 0, 0, 1613109264], [11131, "cherk_left", "border1", 0, 0, 1613109564], [11134, "cherk_left", "border1", 0, 0, 1613109865], [11137, "cherk_left", "border1", 0, 0, 1613110165], [11140, "cherk_left", "border1", 0, 1, 1613110466], [11143, "cherk_left", "border1", 0, 1, 1613110766], [11146, "cherk_left", "border1", 1, 1, 1613111066], [11149, "cherk_left", "border1", 2, 0, 1613111367], [11152, "cherk_left", "border1", 0, 0, 1613111667], [11155, "cherk_left", "border1", 0, 0, 1613111967], [11158, "cherk_left", "border1", 1, 0, 1613112267], [11161, "cherk_left", "border1", 0, 0, 1613112568], [11164, "cherk_left", "border1", 0, 0, 1613112868], [11167, "cherk_left", "border1", 0, 0, 1613113168], [11170, "cherk_left", "border1", 1, 2, 1613113468], [11173, "cherk_left", "border1", 2, 2, 1613113768], [11176, "cherk_left", "border1", 6, 3, 1613114068], [11179, "cherk_left", "border1", 1, 3, 1613114368], [11182, "cherk_left", "border1", 1, 1, 1613114668], [11185, "cherk_left", "border1", 3, 1, 1613114968], [11188, "cherk_left", "border1", 2, 2, 1613115269], [11191, "cherk_left", "border1", 0, 1, 1613115569], [11194, "cherk_left", "border1", 3, 2, 1613115870], [11197, "cherk_left", "border1", 2, 3, 1613116170], [11200, "cherk_left", "border1", 5, 6, 1613116471], [11203, "cherk_left", "border1", 2, 3, 1613116771], [11206, "cherk_left", "border1", 1, 4, 1613117071], [11209, "cherk_left", "border1", 4, 1, 1613117372], [11212, "cherk_left", "border1", 3, 3, 1613117672], [11215, "cherk_left", "border1", 3, 1, 1613117973], [11218, "cherk_left", "border1", 2, 2, 1613118273], [11221, "cherk_left", "border1", 2, 5, 1613118573], [11224, "cherk_left", "border1", 3, 2, 1613118873], [11227, "cherk_left", "border1", 3, 6, 1613119174], [11230, "cherk_left", "border1", 4, 1, 1613119474], [11233, "cherk_left", "border1", 4, 5, 1613119774], [11236, "cherk_left", "border1", 2, 5, 1613120075], [11239, "cherk_left", "border1", 5, 2, 1613120375], [11242, "cherk_left", "border1", 1, 2, 1613120675], [11245, "cherk_left", "border1", 5, 3, 1613120975], [11248, "cherk_left", "border1", 2, 3, 1613121275], [11251, "cherk_left", "border1", 2, 4, 1613121576], [11254, "cherk_left", "border1", 2, 4, 1613121876], [11257, "cherk_left", "border1", 3, 2, 1613122176], [11260, "cherk_left", "border1", 1, 4, 1613122477], [11263, "cherk_left", "border1", 4, 1, 1613122777], [11266, "cherk_left", "border1", 0, 2, 1613123077], [11269, "cherk_left", "border1", 4, 3, 1613123377], [11272, "cherk_left", "border1", 5, 5, 1613123678], [11275, "cherk_left", "border1", 4, 4, 1613123978], [11278, "cherk_left", "border1", 4, 6, 1613124278], [11281, "cherk_left", "border1", 5, 6, 1613124578], [11284, "cherk_left", "border1", 11, 5, 1613124879], [11287, "cherk_left", "border1", 9, 6, 1613125179], [11290, "cherk_left", "border1", 7, 3, 1613125479], [11293, "cherk_left", "border1", 6, 8, 1613125779], [11296, "cherk_left", "border1", 3, 6, 1613126079], [11299, "cherk_left", "border1", 4, 2, 1613126380], [11302, "cherk_left", "border1", 7, 3, 1613126680], [11305, "cherk_left", "border1", 5, 8, 1613126981], [11308, "cherk_left", "border1", 5, 2, 1613127281], [11311, "cherk_left", "border1", 5, 3, 1613127581], [11314, "cherk_left", "border1", 2, 2, 1613127882], [11316, "cherk_left", "border1", 6, 5, 1613128182], [11318, "cherk_left", "border1", 0, 0, 1613128303], [11320, "cherk_left", "border1", 5, 5, 1613128603], [11322, "cherk_left", "border1", 6, 5, 1613128904], [11324, "cherk_left", "border1", 5, 6, 1613129204], [11326, "cherk_left", "border1", 3, 2, 1613129505], [11329, "cherk_left", "border1", 2, 1, 1613129806], [11331, "cherk_left", "border1", 4, 1, 1613130106], [11334, "cherk_left", "border1", 7, 1, 1613130406], [11337, "cherk_left", "border1", 8, 3, 1613130707], [11340, "cherk_left", "border1", 2, 0, 1613131007], [11343, "cherk_left", "border1", 1, 0, 1613131308], [11346, "cherk_left", "border1", 5, 1, 1613131608], [11348, "cherk_left", "border1", 2, 3, 1613131908], [11351, "cherk_left", "border1", 1, 2, 1613132209], [11354, "cherk_left", "border1", 0, 0, 1613132509], [11357, "cherk_left", "border1", 2, 0, 1613132810], [11360, "cherk_left", "border1", 2, 1, 1613133110], [11363, "cherk_left", "border1", 0, 2, 1613133410], [11366, "cherk_left", "border1", 0, 1, 1613133710], [11369, "cherk_left", "border1", 1, 0, 1613134011], [11372, "cherk_left", "border1", 3, 0, 1613134311], [11375, "cherk_left", "border1", 4, 1, 1613134611], [11378, "cherk_left", "border1", 3, 1, 1613134912], [11381, "cherk_left", "border1", 0, 3, 1613135212], [11384, "cherk_left", "border1", 1, 1, 1613135512], [11387, "cherk_left", "border1", 1, 2, 1613135813], [11390, "cherk_left", "border1", 2, 4, 1613136113], [11393, "cherk_left", "border1", 3, 2, 1613136413], [11396, "cherk_left", "border1", 3, 1, 1613136714], [11399, "cherk_left", "border1", 0, 0, 1613137014], [11402, "cherk_left", "border1", 1, 2, 1613137314], [11405, "cherk_left", "border1", 4, 1, 1613137614], [11408, "cherk_left", "border1", 0, 2, 1613137914], [11411, "cherk_left", "border1", 1, 3, 1613138214], [11414, "cherk_left", "border1", 4, 2, 1613138515], [11417, "cherk_left", "border1", 1, 4, 1613138816], [11420, "cherk_left", "border1", 4, 1, 1613139116], [11423, "cherk_left", "border1", 4, 1, 1613139416], [11426, "cherk_left", "border1", 0, 1, 1613139716], [11429, "cherk_left", "border1", 4, 2, 1613140017], [11432, "cherk_left", "border1", 2, 0, 1613140317], [11435, "cherk_left", "border1", 3, 3, 1613140617], [11438, "cherk_left", "border1", 0, 0, 1613140917], [11441, "cherk_left", "border1", 10, 0, 1613141218], [11444, "cherk_left", "border1", 3, 2, 1613141519], [11447, "cherk_left", "border1", 5, 0, 1613141819], [11450, "cherk_left", "border1", 2, 1, 1613142119], [11453, "cherk_left", "border1", 2, 1, 1613142419], [11456, "cherk_left", "border1", 4, 3, 1613142720], [11459, "cherk_left", "border1", 3, 0, 1613143021], [11462, "cherk_left", "border1", 2, 1, 1613143321], [11465, "cherk_left", "border1", 4, 2, 1613143621], [11468, "cherk_left", "border1", 4, 1, 1613143922], [11471, "cherk_left", "border1", 3, 5, 1613144222], [11474, "cherk_left", "border1", 1, 1, 1613144522], [11477, "cherk_left", "border1", 3, 3, 1613144823], [11480, "cherk_left", "border1", 2, 2, 1613145123], [11483, "cherk_left", "border1", 5, 2, 1613145423], [11486, "cherk_left", "border1", 1, 0, 1613145724], [11489, "cherk_left", "border1", 2, 0, 1613146024], [11492, "cherk_left", "border1", 0, 0, 1613146324], [11495, "cherk_left", "border1", 0, 0, 1613146624], [11498, "cherk_left", "border1", 0, 0, 1613146924], [11501, "cherk_left", "border1", 0, 0, 1613147224], [11504, "cherk_left", "border1", 0, 0, 1613147524], [11507, "cherk_left", "border1", 0, 0, 1613147824], [11510, "cherk_left", "border1", 0, 0, 1613147964], [11512, "cherk_left", "border1", 2, 1, 1613148264], [11514, "cherk_left", "border1", 3, 1, 1613148564], [11516, "cherk_left", "border1", 5, 4, 1613148865], [11518, "cherk_left", "border1", 8, 2, 1613149165], [11520, "cherk_left", "border1", 9, 2, 1613149465], [11522, "cherk_left", "border1", 5, 2, 1613149766], [11524, "cherk_left", "border1", 6, 3, 1613150066], [11526, "cherk_left", "border1", 2, 6, 1613150366], [11528, "cherk_left", "border1", 8, 1, 1613150667], [11530, "cherk_left", "border1", 5, 5, 1613150967], [11532, "cherk_left", "border1", 6, 3, 1613151267], [11534, "cherk_left", "border1", 9, 3, 1613151567], [11536, "cherk_left", "border1", 2, 5, 1613151868], [11538, "cherk_left", "border1", 8, 2, 1613152168], [11540, "cherk_left", "border1", 7, 2, 1613152468], [11542, "cherk_left", "border1", 4, 1, 1613152768]]}'
+            let total_users = [0, 0];
+            streamsList.forEach((cam_id, index) => {
+                request['stream_id'] = [cam_id];
+                console.log("post request", request);
+                let cam_in_out = [0, 0];
+                $.post("../statsJson", JSON.stringify(request), function (ans) {
+                    let json = JSON.parse(exmpl);
+                    $('#spinner').remove();
+                    if (json.hasOwnProperty('getStats')) {
+                        let data = json['getStats'];
+                        let items = [[], [], []];
+                        //console.time('start1');
+                        data.forEach((item) => {
+                            items[0].push(item[5]);
+                            items[1].push(item[3]);
+                            items[2].push(item[4]);
+                            cam_in_out[0] += item[3];
+                            cam_in_out[1] += item[4];
+                        })
+                        total_users[0] += cam_in_out[0];
+                        total_users[1] += cam_in_out[1];
+                        //console.timeEnd('start1');
+                        opts['id'] = 'plot_' + cam_id;
+                        opts['title'] = "Camera: " + cam_id + ", IN: " + cam_in_out[0].toString() + ", OUT: " + cam_in_out[1].toString();
+                        console.time('start2');
+                        let uplot = new uPlot(opts, items, document.getElementById('visualization'));
+                        console.timeEnd('start2');
+                        $('#in_users').text(total_users[0]);
+                        $('#out_users').text(total_users[1]);
+                        t.row.add([index + 1, cam_id, cam_in_out[0], cam_in_out[1]]).draw(true);
+                        $('#foot_in').html(total_users[0]);
+                        $('#foot_out').html(total_users[1]);
                     }
-                    console.log("data ready", data);
-                    var items = [];
-                    $.each(data, function (i, item) {
-                        in_users += item[3]
-                        out_users += item[4]
-                        item[0] = i + 1;
-                        item[5] = moment.unix(item[5]).format('MM/DD/YY HH:mm');
-                        t.row.add(item).draw(true);
-                        group_id = (streamsList.indexOf(item[1]) * 2)
-                        console.log("group_id", group_id);
-                        items.push({ 'x': item[5], 'y': item[3], 'group': group_id });
-                        items.push({ 'x': item[5], 'y': item[4], 'group': group_id + 1 });
-                    });
-                    // console.log("data ready", all_intervals);
-                    $('#in_users').text(in_users);
-                    $('#out_users').text(out_users);
-                    dataset = new vis.DataSet(items);
-                    var container = document.getElementById('visualization');
-                    graph2d = new vis.Graph2d(container, items, groups, options);
-                }
-            }).fail(function () {
-                $('#spinner').remove();
-                $('#alertInfo').html('<div class="alert alert-danger" role="alert">Error load data from server!</div>');
-                console.log("error get json");
-            }, "json");
+                }).fail(function () {
+                    $('#spinner').remove();
+                    $('#alertInfo').html('<div class="alert alert-danger" role="alert">Error load data from server!</div>');
+                    console.log("error get json");
+                }, "json");
+            });
+
         }
 
         function addRowsStat(rows) {
@@ -176,14 +147,6 @@
                 if (data[3] == 1) { inOut = "Out"; in_users++; }
                 else { out_users++; }
                 table.row.add([count + 1, data[1], data[2], inOut, moment.unix(data[4]).format('MM/DD/YY HH:mm')]).draw().node();
-                //table
-                //    .append($('<tr>').attr('id', "stat_" + name)
-                //        .append($('<td>').append(count + 1).attr('id', "stat_num_" + (count + 1).toString()))
-                //        .append($('<td>').append(data[1]).attr('id', "stat_name_" + name))
-                //        .append($('<td>').append(data[2]).attr('id', "stat_border_" + name))
-                //        .append($('<td>').append(inOut).attr('id', "stat_inOut_" + name))
-                //        .append($('<td>').append(moment.unix(data[4]).format()).attr('id', "stat_time_" + name))
-                //    );
             }
             console.log("in_users", in_users, out_users);
             $('#in_users').text(in_users);
@@ -204,13 +167,13 @@
                         // console.log("streamsConfigList", typeof (streamsConfigList), streamsConfigList);
                         for (var name in streamsConfigList) { //
                             let divStr = `
-                                                            <div class="input-group mb-auto">
-                                                                <div class="input-group-append">
-                                                                    <span class="input-group-text">`+ name + `</span>
-                                                                    <span class="input-group-text">
-                                                                        <input type="checkbox" aria-label="Autostart" id="addStream_`+ name + `"></span>
-                                                                </div>
-                                                            </div>`;
+                                        <div class="input-group mb-auto">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text">`+ name + `</span>
+                                                <span class="input-group-text">
+                                                    <input type="checkbox" aria-label="Autostart" id="addStream_`+ name + `"></span>
+                                            </div>
+                                        </div>`;
                             $('#camsListSelect').append(divStr);
                         };
                     } else {
@@ -233,15 +196,25 @@
                     targets: [1],
                     orderData: [1, 0]
                 }, {
-                    targets: [4],
-                    orderData: [4, 0]
+                    targets: [2],
+                    orderData: [2, 0]
                 }]
             });
 
             if (wsCmd == null) { WebSocketCmd(); }
             $('#queue_timeRange').daterangepicker({
+                timePicker24Hour: true,
+                ranges: {
+                    '1 hour': [moment(), moment().subtract(1, 'hours')],
+                    '2 hour': [moment(), moment().subtract(2, 'hours')],
+                    '1 day': [moment(), moment().subtract(1, 'days')],
+                    'Last 7 Days': [moment().subtract(6, 'days'), moment()],
+                    'Last 30 Days': [moment().subtract(29, 'days'), moment()],
+                    'This Month': [moment().startOf('month'), moment().endOf('month')],
+                    'Last Month': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+                },
                 timePicker: true,
-                startDate: moment().startOf('hour').subtract(24, 'hour'),
+                startDate: moment().startOf('hour').subtract(1, 'days'),
                 endDate: moment().startOf('hour'),
                 locale: { format: 'MM/DD HH:mm' }
             });
@@ -275,11 +248,6 @@
                             </div>
                             <input type="text" class="form-control" id="queue_camera" value="All" onclick=" $('#camModalDisplay').modal('show');">
 
-                            <!--<div class="input-group-prepend">
-                            <span class="input-group-text">Border</span>
-                        </div>
-                        <input type="text" class="form-control" id="queue_border" value="">-->
-
                             <div class="input-group-prepend">
                                 <span class="input-group-text">In|Out</span>
                             </div>
@@ -288,17 +256,6 @@
                                 <option value="1">In</option>
                                 <option value="2">Out</option>
                             </select>
-                            <!--<div class="input-group-prepend">
-                                <span class="input-group-text">Interval (min)</span>
-                                <select class="custom-select" id="addStream_interval">
-                                    <option value="10">10</option>
-                                    <option value="15">15</option>
-                                    <option value="30">30</option>
-                                    <option selected value="60">60</option>
-                                    <option value="120">120</option>
-                                    <option value="180">180</option>
-                                </select>
-                            </div>-->
                             <button type="button" class="btn btn-primary" onclick="getServerData();">Get data</button>
                         </div>
                     </form>
@@ -308,23 +265,28 @@
         <div class="card">
             <div>
                 <b>Total users in request</b>
-                <span class="badge badge-primary">In:<span id="in_users"></span></span>
-                <span class="badge badge-info">Out:<span id="out_users"></span></span>
+                <span class="badge badge-danger">In:<span id="in_users"></span></span>
+                <span class="badge badge-primary">Out:<span id="out_users"></span></span>
 
             </div>
-            <div id="visualization"></div>
             <div class="card-body">
                 <table id="tableStat" class="display" style="width:100%">
                     <thead>
                         <tr>
                             <th>#</th>
                             <th>Camera</th>
-                            <th>Border</th>
                             <th>In</th>
                             <th>Out</th>
-                            <th>Time</th>
                         </tr>
                     </thead>
+                    <tfoot>
+                        <tr>
+                            <td></td>
+                            <td><b>Total:</b></td>
+                            <td id="foot_in"></td>
+                            <td id="foot_out"></td>
+                        </tr>
+                    </tfoot>
                 </table>
                 <div class="d-flex justify-content-center" id="alertInfo">
                     <div class="spinner-border" role="status" id="spinner">
@@ -349,6 +311,8 @@
                 </div>
             </div>
         </div>
+        <div id="visualization"></div>
+
     </div>
 </body>
 </html>

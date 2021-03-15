@@ -5,7 +5,7 @@ import queue, threading
 import asyncio
 import logging
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
 import yaml
 import cv2
 import nvidia_smi
@@ -15,7 +15,7 @@ from requests_futures import sessions
 import gpuDevice
 
 #from wingu_server import ws_send_data
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 class Manager(threading.Thread):
     def __init__(self, configFileName):
@@ -27,19 +27,23 @@ class Manager(threading.Thread):
         self.camsList = {} # running streams on gpus
         f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
         # Add file rotating handler, with level DEBUG
-        fileLog = logging.handlers.RotatingFileHandler('manager.log', 'a', 100000, 5)
-        fileLog.setLevel(logging.DEBUG)
+        fileLog = logging.handlers.RotatingFileHandler('manager.log', 'a', 1000000, 5)
+        fileLog.setLevel(logging.INFO)
         fileLog.setFormatter(f)
         logging.getLogger().addHandler(fileLog)
 
+ #       physical_devices = tf.config.experimental.list_physical_devices('GPU')
+ #       tf.config.set_visible_devices(physical_devices[0], 'GPU')
+ #       tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
         self.log = logging.getLogger('appManager')
         self._stopevent = threading.Event()
-        self.isGPU = False
+        self.isGPU = True
         self.server_URL = "http://localhost:8080/update?"
-        self.session = sessions.FuturesSession(max_workers=2)
         # self.camIdFrame = []
         self.isGpuStarted = False
         try:
+            self.session = sessions.FuturesSession(max_workers=2)
             self.config = self.loadConfig(configFileName, 'Gpus_manager_')
             if self.config:
                 self.db_path = "db.wingu.sqlite3"
@@ -47,32 +51,35 @@ class Manager(threading.Thread):
                 self.config['gpu_configs'] = {}
                 self.config['streams_configs'] = {}
                 print("gpus manager config", self.config)
-                gpus = tf.config.experimental.list_physical_devices('GPU')
-                if gpus:
-                    print("gpus", gpus)
-                    print("len=", len(self.config['gpus_configs_list']), len(gpus))
-                    self.isGPU = True
+                #gpus = tf.config.experimental.list_physical_devices('GPU')
+                if self.isGPU:
+                #    print("gpus", gpus)
+                #    print("len=", len(self.config['gpus_configs_list']), len(gpus))
+                #    self.isGPU = True
                     nvidia_smi.nvmlInit()
-                    self.gpuInfo = {} 
-                    if len(gpus) <= len(self.config['gpus_configs_list']):
-                        print("gpus_configs_list, gpus config is ok", self.config['gpus_configs_list'])
-                        for index, gpu_id in enumerate(gpus):
-                            print("key", index, gpu_id)
-                            name = "/GPU:" + str(index)
-                            device = str(self.config['gpus_configs_list'][index])
-                            print("gpus name", name, device)
-                            self.gpusList[name] = index
-                            print("gpus 333", self.config['gpus_configs_list'][index])
-                            cfg = self.loadConfig(self.config['gpus_configs_list'][index], "Gpu_")
-                            print("gpus cfg", cfg)
-                            if cfg is not None:
+                    self.gpuInfo = {}
+                    index = 0
+                    gpu_id = 0
+                    #if len(gpus) <= len(self.config['gpus_configs_list']):
+                    #    print("gpus_configs_list, gpus config is ok", self.config['gpus_configs_list'])
+                    #    for index, gpu_id in enumerate(gpus):
+                    print("key", index, gpu_id)
+                    name = "/GPU:" + str(index)
+                    device = str(self.config['gpus_configs_list'][index])
+                    print("gpus name", name, device)
+                    self.gpusList[name] = index
+                    print("gpus 333", self.config['gpus_configs_list'][index])
+                    cfg = self.loadConfig(self.config['gpus_configs_list'][index], "Gpu_")
+                    print("gpus cfg", cfg)
+                    if cfg is not None:
                                 cfg['device_id'] = name
                                 cfg['fileName'] = device
                                 self.gpusConfigList[name] = cfg
                                 if device in self.config['autostart_gpus_list']:
                                     self.startGpu(cfg, name)
-                                    self.gpuInfo[name] = nvidia_smi.nvmlDeviceGetHandleByIndex(index)
-                                    time.sleep(3)
+                                    self.gpuInfo[name] = index
+                                    print("gpu", name, index, self.gpuInfo)
+                                    time.sleep(1)
                 else:
                     name = "/CPU:0"
                     self.gpusList[name] = 0  # Init for CPU
@@ -177,7 +184,7 @@ class Manager(threading.Thread):
             else:
                 self.streamsConfigList[name] = cfg
                 #self.getStreamsConfig(self, client)
-                self.session.get(self.server_URL+"cmd=configUpdated&type=" + type)                
+                self.session.get(self.server_URL+"cmd=configUpdated&type=" + type)
 
     #async def _run(self):
     #    while not self._stopevent.isSet():
@@ -335,7 +342,7 @@ class Manager(threading.Thread):
 
     def getConfig(self):
         #np.append(uid, np.uint8(device_id))
-        return {'managerConfig':self.config}
+        return {'managerConfig':self.config, 'gpusConfigList':self.gpusConfigList}
 
     def getHardwareStatus(self):
         res = {}
@@ -346,11 +353,13 @@ class Manager(threading.Thread):
             if self.isGPU:
                 if self.gpuInfo:
                     for name in self.gpuInfo:
-                        handle = self.gpuInfo[name]
-                        gpu = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
-                        temp = nvidia_smi.nvmlDeviceGetTemperature(handle, nvidia_smi.NVML_TEMPERATURE_GPU)
-                        num = len(self.getActiveGpusList[name].cams)
-                        res[name] = [int(gpu.gpu), int(gpu.memory), int(temp), num]
+                        index = self.gpuInfo[name]
+                        handle = nvidia_smi.nvmlDeviceGetHandleByIndex(index)
+                        r = nvidia_smi.nvmlDeviceGetUtilizationRates(handle)
+                        #temperature = 0
+                        temperature = nvidia_smi.nvmlDeviceGetTemperature(handle, nvidia_smi.NVML_TEMPERATURE_GPU)
+                        num = len(self.gpusActiveList[name].cams)
+                        res[name] = [int(r.gpu), int(r.memory), int(temperature), num]
         except:
             print("get hardware")
             print(sys.exc_info())
@@ -474,7 +483,7 @@ if __name__ == "__main__":
     gpu_id = list(manager.gpusActiveList.keys())[0]
     gpu = manager.gpusActiveList[gpu_id]
     time.sleep(10)
-    print("frame", gpu.cams[cam].id)
+    print("frame", gpu.cams[0].id)
     if gpu:
         while False:
             try:
