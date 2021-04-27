@@ -5,18 +5,23 @@ scipy
 wget
 pyaml
 seaborn
+numba
+cython
 envparse
 tqdm
+pycuda
+nvidia-tensorrt
 aiohttp
 aiosqlite
 requests-futures
 aiohttp_session
 tensorflow
 opencv-python
-# psutil for Windows needs https://github.com/lucasg/Dependencies
+psutil 
+# for Windows needs https://github.com/lucasg/Dependencies
 psutil 
 # for systems with NVIDIA® GPU card with CUDA® architectures 3.5, 5.0, 6.0, 7.0, 7.5, 8.0 and higher than 8.0
 # https://developer.nvidia.com/cuda-gpus
 # need to install the Nvidia CUDA framework and the latest Nvidia driver
-tensorflow-gpu
+# tensorflow-gpu
 nvidia-ml-py3
