@@ -40,10 +40,11 @@ class GpuDevice(threading.Thread):
         self.batch_size = 2
         self.log = log
         self.cams = {}
-        self.config_mot = None
-        with open('config/mot.json') as config_file:
-            config_mot = json.load(config_file, cls=ConfigDecoder)
-            self.config_mot = config['mot']
+        self.max_batch_size = 4
+        self.config_mot = {'engine_path':'models/yolov4_-1_3_416_416_dynamic.engine','max_batch_size':self.max_batch_size}
+        # with open('config/mot.json') as config_file:
+        #     config_mot = json.load(config_file, cls=ConfigDecoder)
+        #     self.config_mot = config['mot']
         self.detector = None
         self.server_URL = "http://localhost:8080/update?"
         self.session = sessions.FuturesSession(max_workers=2)
@@ -54,7 +55,6 @@ class GpuDevice(threading.Thread):
             self.cnt = 0
             self.frame = []
             self.img_size = self.config['img_size']
-            self.max_batch_size = 4
             self._stopevent = threading.Event()
             self.ready = True
             # self.isRunning = False
@@ -152,12 +152,12 @@ class GpuDevice(threading.Thread):
         self.ctx = dev.make_context()
         self.TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
         self.frame_count = 0
-        self.detector = YoloDetector(self.size, self.config_mot['yolo_detector'], self.TRT_LOGGER)
+        self.detector = YoloDetector(self.img_size, self.config_mot, self.TRT_LOGGER)
 
         self.log.debug("GpuDevice starting "+str(self.id))
         while not self._stopevent.isSet():
             # print("GpuDevice tik")
-            start = time.time()
+            start = time.perf_counter()
             self.cnt += 1
             frames = []
             features = []
@@ -181,16 +181,16 @@ class GpuDevice(threading.Thread):
                         print("error frame!!!!!!!!!!!!!!!!!!!!!")
                         print("frame", type(frame), frame.shape, frame)
                         print(sys.exc_info())
-            #start2 = time.time()
+            #start2 = time.perf_counter()
             #print("read time=",len(frames), start2 - start)
             bbxs = 0
             if frames:
                 self.detector.detect_async(frames)
                 boxes = self.detector.postprocess()
                 try:
-                    start2 = time.time()
-                    print("detect", time.time()- start2, len(trt_outputs[0]))
-                    print("boxes", len(boxes), time.time()- start2)
+                    start2 = time.perf_counter()
+                    print("detect", time.perf_counter()- start2, len(boxes))
+                    print("boxes", len(boxes), time.perf_counter()- start2)
                     for j in range(len(cams)):
                         cams[j].track(boxes[j], frames[j], features)
                 except:

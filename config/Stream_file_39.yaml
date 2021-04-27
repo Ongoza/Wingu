@@ -10,7 +10,7 @@ borders:
   - - 312
     - 104
 display_video_flag: true
-encoder_filename: mars-small128.pb
+encoder_filename: mars-small128
 img_size_start:
 - 1600
 - 1200

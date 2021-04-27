@@ -171,7 +171,12 @@ class VideoCapture:
                     self.borders[key][1] = [int(self.borders[key][1][0]*scale),int(self.borders[key][1][1]*scale)]
                     self.intersections[key] = [0, 0]
             self.out = None
-            self.encoder = gdet.create_box_encoder(os.path.join('models',self.config['encoder_filename']), batch_size=self.batch_size, device=self.vc_device)
+            print("start load encoder", os.path.join('models',self.config['encoder_filename']))
+            self.encoder = gdet.create_box_encoder(
+              os.path.join('models', 'mars-small128.onnx'), 
+              batch_size=self.batch_size, 
+              device=self.vc_device)
+            print("encider is ok")
             if self.save_video_flag:            
                 outFile = self.config['save_path'] +"_"+ str(self.startTime)+".avi"
                 if outFile == '': outFile =  'video/'+str(self.id)+"_"+ str(self.startTime)+"_auto.avi"
@@ -197,10 +202,10 @@ class VideoCapture:
             self.session.get(self.server_URL+'cmd=startStream&name='+self.id+'&status=OK')
             self._stopevent = threading.Event()
         except:
-            self.session.get(self.server_URL+'cmd=startStream&name='+self.id+'&status=error')
-            self.log.debug("VideoStream Can not start Video Stream for " + camConfig)            
-            print("VideoStream err types",type(traceback.print_exception(*sys.exc_info())), type(sys.exc_info())) 
             print("VideoStream err:", sys.exc_info())
+            # self.session.get(self.server_URL+'cmd=startStream&name='+self.id+'&status=error')
+            self.log.debug("VideoStream Can not start Video Stream for " + camConfig)            
+            # print("VideoStream err types",type(traceback.print_exception(*sys.exc_info())), type(sys.exc_info())) 
             self.id = None
 
     def writeVideo(self, frame):
@@ -298,22 +303,22 @@ class VideoCapture:
     def track(self, boxs, frame=None, features=None):
         #print("boxs", len(boxs))
         try:
-            start = time.pref_counter()
+            start = time.perf_counter()
             #frame = self.cur_proceed_frame
-            if self.type == 0:
+            if self.type == 10:
                 #print("len(boxs)", len(boxs))
                 if(len(boxs)):
-                    start_3 = time.pref_counter()
+                    start_3 = time.perf_counter()
                     features = self.encoder(frame, boxs)
-                    #start_3 = time.time()
+                    #start_3 = time.perf_counter()
                     detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(boxs, features)]
-                    #start_4 = time.time()
+                    #start_4 = time.perf_counter()
                     #print("detection", start_4 -start_3)
                     self.tracker.predict()
-                    #start_5 = time.time()
+                    #start_5 = time.perf_counter()
                     #print("predict", start_5 - start_4)
                     self.tracker.update(detections)
-                    #start_6 = time.time()
+                    #start_6 = time.perf_counter()
                     #print("track.update", start_6 - start_5)
                     for track in self.tracker.tracks:
                         if(not track.is_confirmed() or track.time_since_update > 1):
@@ -347,7 +352,7 @@ class VideoCapture:
                             txy =  tuple(xy)
                             cv2.circle(frame, txy, 5, clr, -1)
                             cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
-                    #start7 = time.time()
+                    #start7 = time.perf_counter()
                     #print("trakes", start7 - start_6)
                 self.drawBorderLines(frame)
                 txt_frame = "Frame:"+str(self.cur_frame_cnt)
@@ -355,14 +360,14 @@ class VideoCapture:
                     txt_frame += " In:"+str(self.intersections[key][0])+" Out:"+str(self.intersections[key][1])
                 cv2.putText(frame, txt_frame, (10, 340), 0, 0.4, self.text_color, 1)
                 self.outFrame = np.copy(frame)
-                #start8 = time.time()
+                #start8 = time.perf_counter()
                 #print('self.outFrame', start8-start7)
                 if self.save_video_flag:
                     frame = cv2.resize(self.outFrame,self.save_video_res)
                     self.out.write(frame)
                     #self.writeVideo(frame)
-                #print("write", time.time()-start8)
-                self.proceedTime[1] = time.time() - start
+                #print("write", time.perf_counter()-start8)
+                self.proceedTime[1] = time.perf_counter() - start
                 #print("track", self.proceedTime[1])
             else:
                 pass

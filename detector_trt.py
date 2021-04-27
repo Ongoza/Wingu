@@ -1,4 +1,4 @@
-import time
+import os, time
 import numpy as np
 import numba as nb
 import cv2
@@ -18,51 +18,61 @@ class HostDeviceMem:
     def __repr__(self):
         return self.__str__()
 
-class YoloDetector(Detector):
-    def __init__(self, size, config, logger):
-        self.size = size
-        self.logger = logger
+class YoloDetector():
+    def __init__(self, img_size, config, logger):
+        self.img_size = img_size
+        self.TRT_LOGGER = logger
         self.config = config
-        self.engine_path = 'models/yolov4_-1_3_16_416_416_dynamic.engine'
+        self.batch_size = 1
+        self.max_batch_size =  config['max_batch_size']
+        self.engine_path = config['engine_path']
         self.trt_runtime = trt.Runtime(self.TRT_LOGGER)
-        with open(self.engine_path, "rb") as f:
-            self.engine = self.trt_runtime.deserialize_cuda_engine(f.read())
-        self.context = self.engine.create_execution_context()
-        print("max_batch_size", self.max_batch_size)
-        self.context.set_binding_shape(0, (self.max_batch_size, 3, self.img_size, self.img_size))
-        self.inputs = []
-        self.outputs = []
-        self.bindings = []
-        self.stream = cuda.Stream()
-        for binding in self.engine:
-            size = trt.volume(self.engine.get_binding_shape(binding)) * self.max_batch_size
-            dims = self.engine.get_binding_shape(binding)        
-            if dims[0] < 0: size *= -1        
-            dtype = trt.nptype(self.engine.get_binding_dtype(binding))
-            # Allocate host and device buffers
-            print("size, dtype", size, dtype, dims)
-            host_mem = cuda.pagelocked_empty(size, dtype)
-            device_mem = cuda.mem_alloc(host_mem.nbytes)
-            # Append the device buffer to device bindings.
-            self.bindings.append(int(device_mem))
-            # Append to the appropriate list.
-            if self.engine.binding_is_input(binding): 
-                self.inputs.append(HostDeviceMem(host_mem, device_mem))
-            else: 
-                self.outputs.append(HostDeviceMem(host_mem, device_mem))
+        # print(os.listdir('models'))
+        if os.path.exists(self.engine_path):
+          with open(self.engine_path, "rb") as f:
+              self.engine = self.trt_runtime.deserialize_cuda_engine(f.read())
+          self.context = self.engine.create_execution_context()
+          print("max_batch_size", self.max_batch_size)
+          self.context.set_binding_shape(0, (self.max_batch_size, 3, self.img_size, self.img_size))
+          self.inputs = []
+          self.outputs = []
+          self.bindings = []
+          self.stream = cuda.Stream()
+          for binding in self.engine:
+              size = trt.volume(self.engine.get_binding_shape(binding)) * self.max_batch_size
+              dims = self.engine.get_binding_shape(binding)        
+              if dims[0] < 0: size *= -1        
+              dtype = trt.nptype(self.engine.get_binding_dtype(binding))
+              # Allocate host and device buffers
+              print("size, dtype", size, dtype, dims)
+              host_mem = cuda.pagelocked_empty(size, dtype)
+              device_mem = cuda.mem_alloc(host_mem.nbytes)
+              # Append the device buffer to device bindings.
+              self.bindings.append(int(device_mem))
+              # Append to the appropriate list.
+              if self.engine.binding_is_input(binding): 
+                  self.inputs.append(HostDeviceMem(host_mem, device_mem))
+              else: 
+                  self.outputs.append(HostDeviceMem(host_mem, device_mem))
+        else:
+          print("!!!!!!!!!!!!Engine does not exist!!", self.engine_path)
 
 
     def detect_async(self, frames):
-        self.inputs[0].host = self._preprocess(frames)
-        self.do_inference_new(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream, batch_size=batch_size)
+        frames_tf = np.transpose(frames, (2, 3, 1, 0)).astype(np.float32) / 255.0
+        frames_tf = np.stack(frames, axis=0)
+        frames_tf = np.ascontiguousarray(frames_tf)
+        self.batch_size = len(frames)
+        self.inputs[0].host = frames_tf
+        self.do_inference_new(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream, batch_size=self.batch_size)
 
 
     def postprocess(self):
         self.stream.synchronize()
         trt_outputs = [out.host for out in self.outputs]
         print("type outputs", trt_outputs)
-        trt_outputs = trt_outputs.cpu().detach().numpy()
-        boxes = self.post_processing(0, 0.3, 0.4, self.img_size, trt_outputs)
+        # trt_outputs = trt_outputs.cpu().detach().numpy()
+        boxes = self.post_processing(0, 0.3, 0.4, self.img_size, trt_outputs, self.batch_size)
         return boxes
 
     def do_inference_new(self, context, bindings, inputs, outputs, stream, batch_size=1):
@@ -72,7 +82,7 @@ class YoloDetector(Detector):
         [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
 
     # https://github.com/numba/numba/issues/2411
-    def post_processing(self, cls, conf_thresh, nms_thresh, scale, output):
+    def post_processing(self, cls, conf_thresh, nms_thresh, scale, output, batch_size):
         box_array = output[0].reshape(batch_size, -1, 1, 4)
         confs = output[1].reshape(batch_size, -1, 80)
         box_array = box_array[:, :, 0]
@@ -128,10 +138,10 @@ class YoloDetector(Detector):
             order = order[inds + 1]
         return np.array(keep)
 
-    @staticmethod
-    @nb.njit(fastmath=True, cache=True)
-    def _preprocess(frames):
-        frames_tf = np.transpose(frames, (2, 3, 1, 0)).astype(np.float32) / 255.0
-        frames_tf = np.stack(frames, axis=0)
-        frames_tf = np.ascontiguousarray(frames_tf)
-        return frames_tf
+    # @staticmethod
+    # @nb.njit(fastmath=True, cache=True)
+    # def _preprocess(frames):
+    #     frames_tf = np.transpose(frames, (2, 3, 1, 0)).astype(np.float32) / 255.0
+    #     frames_tf = np.stack(frames, axis=0)
+    #     frames_tf = np.ascontiguousarray(frames_tf)
+    #     return frames_tf
