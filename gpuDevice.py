@@ -25,7 +25,7 @@ import deep_sort.generate_detections_onnx as gdet
 #from tf2_yolov4.anchors import YOLOV4_ANCHORS
 #from tf2_yolov4.model import YOLOv4
 
-from videoCapture_trt import *
+from videoCapture import *
 from detector_trt import YoloDetector 
 #import tensorflow as tf
 # from server import log
