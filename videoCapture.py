@@ -1,76 +1,110 @@
-# XLA_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda" python ml_code.py
-# TF_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda" python ml_code.py
 import os, sys, traceback
-import time
-import queue, threading
-import logging
-import random
-import json
-import math
-import yaml
-import numpy as np
-import cv2
-import asyncio
-from requests_futures import sessions
-# import tensorflow as tf
-
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
-from deep_sort import nn_matching
-from deep_sort import preprocessing
+import time
+import threading
+import logging
+import math
+import numpy as np
+import numba as nb
+
+import cv2
+#import asyncio
+from requests_futures import sessions
 import deep_sort.generate_detections_onnx as gdet
-# pb tracker
-# Y4 cams(1) proceed time =0.23165488243103027
-# track 0.11701178550720215
-# Y4 cams(1) proceed time =0.23734092712402344
-# track 0.10979652404785156
+
+from deep_sort import nn_matching
 
 from deep_sort.detection import Detection
 from deep_sort.tracker import Tracker
 
-class VideoCaptureStream:
 
-    def __init__(self, name):
+class VideoCaptureFile:
+    def __init__(self, name, frame_res, skip_frames=0):
         self.id = name
+        print("start file reader")
+        self.skip_frames = skip_frames
         self.cap = cv2.VideoCapture(name)
-        # self.q = queue.Queue()
-        self.q = (None,None)
+        self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - 10
+        self.proceed_frames_cnt = 0
+        self.cur_frame_cnt = 0
+        self.frame_res = frame_res
+        print("start file reader 2")
+        self.q = None
+        self.takeOff = True
+        self.isStop = False
         t = threading.Thread(target=self._reader)
         t.daemon = True
+        t.start()
+
+    def _reader(self):
+        while True:
+            #if self.takeOff:
+                #print("read", self.proceed_frames_cnt, self.totalFrames)
+                if self.proceed_frames_cnt < self.totalFrames:
+                    ret, frame = self.cap.read()
+                    self.cur_frame_cnt += 1
+                    self.proceed_frames_cnt = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+                    if self.skip_frames:
+                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.proceed_frames_cnt + self.skip_frames)
+                    #print("ret", ret, self.proceed_frames_cnt)
+                    if (ret):
+                        frame = cv2.resize(frame, self.frame_res)
+                        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        #frame_tf = np.transpose(frame, (2, 0, 1)).astype(np.float32) / 255.0
+                        self.q = frame
+                        #self.takeOff = False
+                    else:
+                        self.q = None
+                        #self.takeOff = True
+                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.proceed_frames_cnt + 1)
+                        time.sleep(0.01)
+                else:
+                    self.isStop = True
+            #else:
+                #time.sleep(0.001)
+
+    def read(self): 
+        self.takeOff = True
+        return self.q
+
+    def kill(self):
+        self.cap.release()
+
+class VideoCaptureStream:
+    def __init__(self, name, frame_res):
+        self.id = name
+        self.isStop = False
+        self.frame_res = frame_res
+        #print("VideoCaptureStream", name)
+        self.cap = cv2.VideoCapture(name)
+        #print("VideoCaptureStream", self.cap)
+
+        self.q = None
+        t = threading.Thread(target=self._reader)
+        t.daemon = True
+        print("stream started!")
         t.start()
 
     # read frames as soon as they are available, keeping only most recent one
     def _reader(self):
         while True:
                 ret, frame = self.cap.read()
+                #print("stream ret", ret)
                 if ret:
-                    frame = cv2.resize(frame, (416,416))
+                    frame = cv2.resize(frame, self.frame_res)
                     #cv2.resize(image_src_0, image_size, interpolation=cv2.INTER_LINEAR)
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    frame_tf = np.transpose(frame, (2, 0, 1)).astype(np.float32)/255.0
-                    #frame_tf = tf.convert_to_tensor(frame, dtype=tf.float32, dtype_hint=None, name=None) / 255.0
-                    self.q = (frame_tf, frame)
-                    # self.q_raw = frame
-                    # if not self.q.empty():
-                    #     try:
-                    #         self.q.get_nowait()   # discard previous (unprocessed) frame
-                    #     except queue.Empty:
-                    #         print("empty queue", self.id)
-                    #         pass
-                    # self.q.put(frame)
-                    # self.error_counter = self.error_counter_default
+                    #frame_tf = np.transpose(frame, (2, 0, 1)).astype(np.float32)/255.0
+                    self.q = frame
                 else:
                     # print("skip frame cam/empty", self.id)
-                    self.q = (None,None)
-                    time.sleep(0.1)
-            # except:
-            #     print("strean exception")
-            #     print(sys.exc_info())
+                    self.q = None
+                    time.sleep(0.01)
 
     def read(self):
         return self.q
 
     def kill(self):
-        # self.q.get_nowait()
         self.cap.release()
 
 class VideoCapture:
@@ -113,9 +147,9 @@ class VideoCapture:
             self.cap = None
             self.buffer = 200
             self.img_size = int(gpuConfig['img_size'])
-            # self.lastFrame = 100
+            print("img size", self.img_size) 
             self.cur_proceed_frame = None
-            self.max_hum_w = int(self.img_size/4)
+            self.max_hum_w = int(self.img_size/2)
             self.GPUconfig = gpuConfig
             self.frame_res = (self.img_size, self.img_size)
             self.skip_frames = int(self.config['skip_frames'])
@@ -127,36 +161,41 @@ class VideoCapture:
             if(self.config['save_video_flag'] or self.config['display_video_flag']):
                 self.isDrow = True
                 self.save_video_res = tuple(self.config['save_video_res'])
+            print("save video res", self.save_video_res)
+            scale = self.img_size/416.0
             self.borders = self.config['borders']
+            print("scale", scale, self.borders)
             if self.borders:
-                for border in self.borders:
-                    self.intersections[border] = [0, 0]
+                for key in self.borders:
+                    self.borders[key][0] = [int(self.borders[key][0][0]*scale),int(self.borders[key][0][1]*scale)]
+                    self.borders[key][1] = [int(self.borders[key][1][0]*scale),int(self.borders[key][1][1]*scale)]
+                    self.intersections[key] = [0, 0]
             self.out = None
+            self.encoder = gdet.create_box_encoder(os.path.join('models',self.config['encoder_filename']), batch_size=self.batch_size, device=self.vc_device)
             if self.save_video_flag:            
                 outFile = self.config['save_path'] +"_"+ str(self.startTime)+".avi"
                 if outFile == '': outFile =  'video/'+str(self.id)+"_"+ str(self.startTime)+"_auto.avi"
                 self.log.info("!!!!!!Save out video to file " + outFile)
                 self.out = cv2.VideoWriter(outFile, cv2.VideoWriter_fourcc(*'XVID'), 5, self.save_video_res)
-            print("VideoCapture stream start load encoder")
-            #with tf.device(self.vc_device):
-            self.encoder = gdet.create_box_encoder(os.path.join('models',self.config['encoder_filename']), batch_size=self.batch_size, device=self.vc_device)
             print("VideoCapture stream start load tracker")
-            if self.encoder is not None:
-                self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", self.config['max_cosine_distance'], None))
-                print("VideoCapture stream tracker ok")
-                if not self.isFromFile:
-                    url = self.pipline_str.format(self.url, self.buffer)
-                    self.q = VideoCaptureStream(url)
-                else:
-                    self.cap = cv2.VideoCapture(self.url)
-                    self.totalFrames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT)) - 10
-                self._stopevent = threading.Event()
+            self.tracker = Tracker(nn_matching.NearestNeighborDistanceMetric("cosine", self.config['max_cosine_distance'], None))
+            print("VideoCapture stream tracker ok")
+            if not self.isFromFile:
+                #print("start read from camera")
+                url = self.pipline_str.format(self.url, self.buffer)
+                print("url", self.url,"\n", url)
+                #self.q = VideoCaptureStream(self.url, self.frame_res)
+                self.q = VideoCaptureStream(url, self.frame_res)
+                print("self.q", self.q)
+            else:
+                #print("start read from file")
+                self.q = VideoCaptureFile(self.url, self.frame_res, self.skip_frames)
+                self.totalFrames = self.q.totalFrames
+                print("created stream ok")
                 #if client is not None:
                 #    client.send_json({'OK':["startStream", self.id]})
-            else:
-                print("VideoCapture encoder is None")
-                return None
             self.session.get(self.server_URL+'cmd=startStream&name='+self.id+'&status=OK')
+            self._stopevent = threading.Event()
         except:
             self.session.get(self.server_URL+'cmd=startStream&name='+self.id+'&status=error')
             self.log.debug("VideoStream Can not start Video Stream for " + camConfig)            
@@ -164,8 +203,8 @@ class VideoCapture:
             print("VideoStream err:", sys.exc_info())
             self.id = None
 
-    def writeVideo(self):
-       self.out.write(self.outFrame)
+    def writeVideo(self, frame):
+       self.out.write(frame)
 
     def get_status(self):
         status = {}
@@ -196,54 +235,27 @@ class VideoCapture:
         return self.outFrame   
 
     def read(self):
-        start = time.time()
-        if self.isFromFile:
-            # print("proceed_frames_cnt="+str(self.proceed_frames_cnt))
-            if self.proceed_frames_cnt < self.totalFrames:
-                ret, frame = self.cap.read()
-                self.cur_frame_cnt += 1
-                self.proceed_frames_cnt = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
-                if self.skip_frames:
-                    self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.proceed_frames_cnt + self.skip_frames)
-                if (ret):
-                   frame = cv2.resize(frame, self.frame_res)
-                   frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                   frame_tf = np.transpose(frame, (2, 0, 1)).astype(np.float32) / 255.0
-                   #frame_tf = tf.convert_to_tensor(frame, dtype=tf.float32, dtype_hint=None, name=None)/ 255.0
-                   if self.type == 1:
-                       print("start cut area")
-                else:
-                    # self.log.debug("Skip frame")
-                    frame_tf = self.read()
-                self.proceedTime[0] = time.time() - start
-                self.cur_proceed_frame = frame
-                return frame_tf
-            else:
-                self.session.get(self.server_URL+'cmd=stopStream&name='+self.id+'&status=OK&module=stream')
-                print("stop cam", self.id)
-                time.sleep(1)
-                self.kill()
+        if self.q.isStop:
+            self.session.get(self.server_URL+'cmd=stopStream&name='+self.id+'&status=OK&module=stream')
+            print("stop cam", self.id)
+            self.kill()
+            return None
         else:
             start = time.time()
-            frame_tf, self.cur_proceed_frame = self.q.read()
-            # print("tf", frame_tf.shape)
-            if frame_tf is not None:
+            frame = self.q.read()
+            if frame is not None:
+                # self.out.write(frame)
+                frame = np.array(frame)
                 self.cur_frame_cnt += 1
                 self.proceed_frames_cnt += 1
-                # frame = cv2.resize(frame, self.frame_res)
-                # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                # frame_tf = tf.convert_to_tensor(frame, dtype=tf.float32, dtype_hint=None, name=None) / 255.0
-                # print("frame", type(frame_tf))
                 if self.type == 1:
                    print("start cut area")
                    #https://stackoverflow.com/questions/48301186/cropping-concave-polygon-from-image-using-opencv-python
                 self.proceedTime[0] = time.time() - start
-                # print("frame read", frame.shape, self.proceedTime[0], self.id)
-                # self.cur_proceed_frame = frame
-                return frame_tf
+                return frame
             else:
-                print("skip by zero", type(frame_tf))
-                return False
+                print("skip by zero", type(frame))
+                return None
 
     def ccw(self,A,B,C):
         return (C[1]-A[1]) * (B[0]-A[0]) > (B[1]-A[1]) * (C[0]-A[0])
@@ -264,6 +276,7 @@ class VideoCapture:
                 else:
                     self.intersections[key][1] += 1
                     res = 2
+                print("intersections",self.intersections)                
         return res
 
     def drawBorderLines(self, frame):
@@ -282,22 +295,20 @@ class VideoCapture:
             cv2.putText(frame, "Out", z1, 0, 1, (0, 255, 0), 1)
         return frame
 
-    def track(self, boxs):
+    def track(self, boxs, frame=None, features=None):
+        #print("boxs", len(boxs))
         try:
-            start = time.time()
-            frame = self.cur_proceed_frame
+            start = time.pref_counter()
+            #frame = self.cur_proceed_frame
             if self.type == 0:
-                #start_2 = time.time()
-                #print("select", len(boxs), start_2-start)
+                #print("len(boxs)", len(boxs))
                 if(len(boxs)):
-                    #with tf.device(self.vc_device):
+                    start_3 = time.pref_counter()
                     features = self.encoder(frame, boxs)
-                    # print("features", type (features), features[0].shape )
                     #start_3 = time.time()
-                    #print("features", start_3 - start_2)
                     detections = [Detection(bbox, 1.0, feature) for bbox, feature in zip(boxs, features)]
                     #start_4 = time.time()
-                    #print("detection", start_4 - start_3)
+                    #print("detection", start_4 -start_3)
                     self.tracker.predict()
                     #start_5 = time.time()
                     #print("predict", start_5 - start_4)
@@ -336,16 +347,23 @@ class VideoCapture:
                             txy =  tuple(xy)
                             cv2.circle(frame, txy, 5, clr, -1)
                             cv2.putText(frame, track_name, txy, 0, 0.4, clr, 1)
-                    #print("trakes", time.time() - start_6)
+                    #start7 = time.time()
+                    #print("trakes", start7 - start_6)
                 self.drawBorderLines(frame)
-                cv2.putText(frame, "Frame: "+str(self.cur_frame_cnt), (10, 340), 0, 0.4, self.text_color, 1)
-                frame = cv2.resize(frame,self.save_video_res)
+                txt_frame = "Frame:"+str(self.cur_frame_cnt)
+                for key in self.borders:
+                    txt_frame += " In:"+str(self.intersections[key][0])+" Out:"+str(self.intersections[key][1])
+                cv2.putText(frame, txt_frame, (10, 340), 0, 0.4, self.text_color, 1)
                 self.outFrame = np.copy(frame)
-                # print('self.outFrame', self.outFrame)
+                #start8 = time.time()
+                #print('self.outFrame', start8-start7)
                 if self.save_video_flag:
-                    self.writeVideo()
+                    frame = cv2.resize(self.outFrame,self.save_video_res)
+                    self.out.write(frame)
+                    #self.writeVideo(frame)
+                #print("write", time.time()-start8)
                 self.proceedTime[1] = time.time() - start
-                print("track", self.proceedTime[1])
+                #print("track", self.proceedTime[1])
             else:
                 pass
                 #print("start calculate people in area")
@@ -355,6 +373,7 @@ class VideoCapture:
 
     def kill(self):
         try:
+            print("try to kill videoCapture")
             self._stopevent.set()
             self.isRun = False 
             self.session.get(self.server_URL+'cmd=stopStream&name='+self.id+'&status=OK&module=stream')
@@ -367,52 +386,62 @@ class VideoCapture:
             print(sys.exc_info()[0]) 
         self.log.info("videoCapture exit done")
 
-if __name__ == "__main__":
-    print("start")
+# if __name__ == "__main__":
+#     print("start")
+#
+#     log = logging.getLogger('app')
+#     log.setLevel(logging.DEBUG)
+#     f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
+#     ch = logging.StreamHandler()
+#     ch.setLevel(logging.DEBUG)
+#     ch.setFormatter(f)
+#     log.addHandler(ch)
+#
+#     streams = []
+#     with open('config/Stream_file_39.yaml', encoding='utf-8') as f:
+#         configStream = yaml.load(f, Loader=yaml.FullLoader)
+#     with open('config/Gpu_device0.yaml', encoding='utf-8') as f:
+#         configGpu = yaml.load(f, Loader=yaml.FullLoader)
+#     device_id = 0
+#     cam_id = 'file_39'
+#     #                           camConfig, gpuConfig, device_id, cam_id, log
+#     streams.append(VideoCapture(configStream, configGpu, device_id, cam_id, log))
+#     time.sleep(5)
+#     if len(streams) > 0:
+#         while True:
+#             try:
+#                 for stream in streams:
+#                     print("stream", stream.cur_frame_cnt, stream.totalFrames)
+#                     frame = stream.read()
+#                     if frame.any():
+#                         cv2.imshow("preview", frame)
+#                         print("dd",)
+#                         if stream.proceedTime[0]:
+#                             print("fps", 1.0/(stream.proceedTime[0]))
+#                         if stream.proceedTime[1]:
+#                             print("fps", 1.0/(stream.proceedTime[1]))
+#                     else:
+#                         print("skip frame")
+#                 key = cv2.waitKey(2)
+#                 if key & 0xFF == ord('q'): break
+#             except:
+#                 print("stop by exception")
+#                 print(sys.exc_info())
+#                 break
+#     for stream in streams:
+#         stream.kill()
+#     cv2.destroyAllWindows()
+#
+#   #  read  time =  0.015438318252563477
+#   #  detect  time = 1.2223217487335205
+#   #  proceed  time = 1.21510648727417
 
-    log = logging.getLogger('app')
-    log.setLevel(logging.DEBUG)
-    f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    ch.setFormatter(f)
-    log.addHandler(ch)
-    
-    streams = []
-    with open('config/Stream_file_39.yaml', encoding='utf-8') as f:    
-        configStream = yaml.load(f, Loader=yaml.FullLoader)  
-    with open('config/Gpu_device0.yaml', encoding='utf-8') as f:    
-        configGpu = yaml.load(f, Loader=yaml.FullLoader)
-    device_id = 0
-    cam_id = 'file_39'
-    #                           camConfig, gpuConfig, device_id, cam_id, log
-    streams.append(VideoCapture(configStream, configGpu, device_id, cam_id, log))
-    time.sleep(5)
-    if len(streams) > 0:
-        while True:
-            try:
-                for stream in streams:
-                    print("stream", stream.cur_frame_cnt, stream.totalFrames)
-                    frame = stream.read()
-                    if frame.any():
-                        cv2.imshow("preview", frame)
-                        print("dd",)
-                        if stream.proceedTime[0]:
-                            print("fps", 1.0/(stream.proceedTime[0]))
-                        if stream.proceedTime[1]:
-                            print("fps", 1.0/(stream.proceedTime[1]))
-                    else:
-                        print("skip frame")
-                key = cv2.waitKey(2)
-                if key & 0xFF == ord('q'): break
-            except:
-                print("stop by exception")
-                print(sys.exc_info()) 
-                break
-    for stream in streams:
-        stream.kill()
-    cv2.destroyAllWindows()
-
-  #  read  time =  0.015438318252563477
-  #  detect  time = 1.2223217487335205
-  #  proceed  time = 1.21510648727417
+#    features 0.11533737182617188
+#detection 0.0002684593200683594
+#predict 0.002065420150756836
+#track.update 0.007570743560791016
+#trakes 0.0002079010009765625
+#self.outFrame 0.0007374286651611328
+#write 0.0034914016723632812
+#track 0.12968873977661133
+#TRT cams(1) proceed time =0.14783382415771484

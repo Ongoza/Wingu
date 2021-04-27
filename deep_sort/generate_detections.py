@@ -3,7 +3,7 @@ import errno
 import argparse
 import numpy as np
 import cv2
-import tensorflow as tf
+import onnxruntime as rt
 
 
 def _run_in_batches(f, data_dict, out, batch_size):
@@ -72,45 +72,16 @@ def extract_image_patch(image, bbox, patch_shape):
 
 
 class ImageEncoder(object):
-    def __init__(self, checkpoint_filename, input_name="images", output_name="features", device="/CPU:0"):
-        self.d_graph = tf.Graph()
-        self.device =  device
-        # with tf.device("/CPU:0"):
-        config =  tf.compat.v1.ConfigProto(device_count={"GPU": 0})
-        # config = tf.compat.v1.ConfigProto()
-        with tf.device(self.device):
-            with self.d_graph.as_default():
-                self.session = tf.compat.v1.Session(config=config)
-                graph_def = tf.compat.v1.GraphDef()
-                with tf.io.gfile.GFile(checkpoint_filename, "rb") as file_handle:
-                    graph_def.ParseFromString(file_handle.read())
-                tf.import_graph_def(graph_def, name="net")
-            self.input_var = self.d_graph.get_tensor_by_name("net/%s:0" % input_name)
-            self.output_var = self.d_graph.get_tensor_by_name("net/%s:0" % output_name)
+    def __init__(self, filename, device="/CPU:0"):
+        self.sess = rt.InferenceSession(filename)
+        self.image_shape = [128, 64, 3]
 
-            assert len(self.output_var.get_shape()) == 2
-            assert len(self.input_var.get_shape()) == 4
-            self.feature_dim = self.output_var.get_shape().as_list()[-1]
-            self.image_shape = self.input_var.get_shape().as_list()[1:]
-        # model.save(output_weights_path)
-
-    def __call__(self, data_x, batch_size=16):
-        # print("call", data_x.shape)
-        out = np.zeros((len(data_x), self.feature_dim), np.float32)
-        # data_x = tf.convert_to_tensor(data_x, dtype=tf.uint8)
-        # data_xx = tf.constant(data_x)
-        # data_xx = data_x.eval()
-        # data_xx = self.session.run(data_x)
-        with tf.device(self.device):
-            _run_in_batches(
-                lambda x: self.session.run(self.output_var, feed_dict=x),
-                {self.input_var: data_x}, out, batch_size)
-
-        return out
+    def __call__(self, images, batch_size=32):
+        return  self.sess.run(None, {'images:0': images})[0]
 
 
-def create_box_encoder(model_filename, input_name="images", output_name="features", batch_size=16, device="/CPU:0"):
-    image_encoder = ImageEncoder(model_filename, input_name, output_name, device)
+def create_box_encoder(model_filename,  batch_size=32, device="/CPU:0"):
+    image_encoder = ImageEncoder("models/mars-small128.onnx",  device)
     image_shape = image_encoder.image_shape
 
     def encoder(image, boxes):
@@ -133,7 +104,7 @@ def generate_detections(encoder, mot_dir, output_dir, detection_dir=None):
     """Generate detections with features.
 
     Parameters
-    ----------generate_detections.py
+    ----------
     encoder : Callable[image, ndarray] -> ndarray
         The encoder function takes as input a BGR color image and a matrix of
         bounding boxes in format `(x, y, w, h)` and returns a matrix of

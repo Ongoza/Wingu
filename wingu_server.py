@@ -64,7 +64,7 @@ class Server:
 
         self.managerConfigFile = "default"
         self.hardware_timer = 300
-        self.stats_timer = 300
+        self.stats_timer = 1200
         self.ws_timer = 2        
         self.db_path = "db.wingu.sqlite3"
         self.db_path_hw = "db.wingu_hardware.sqlite3"
@@ -117,11 +117,7 @@ class Server:
         self.log.info('Running...')
         web.run_app(self.app)
 
-        #  Stop cameras manager Object
-        if 'manager' in self.app:
-            self.app['manager'].kill()
-        self.log.info('The server stopped!')
-
+        # self.kill()
 
     async def saveConfig(self, ws, config):
         res = {'OK':["saveConfig", config['tp'], config['name'], config['autostart'], config['isNew']]}
@@ -314,17 +310,6 @@ class Server:
             print("can not open file")
             return web.json_response({"error":["server","getFileImg","can not open file"]})
 
-    async def on_shutdown(self, app):
-        print("start on_shutdown")
-        if  'websocketscmd' in app:
-            wss = list(self.app['websocketscmd'])
-            for ws in wss:
-                try:
-                    await ws.close(code=1001, message='Server shutdown')
-                finally:
-                    self.app['websocketscmd'].discard(ws)
-
-
     def removeLiveStreams(self, ws):
         for stream in list(self.live_streams):
             self.removeLiveStream(self, ws, stream) 
@@ -420,12 +405,9 @@ class Server:
                     rows = await cursor.fetchall()
                     if rows: res = json.dumps({'getStatsHard':rows})
                     else: res = json.dumps({'getStatsHard':[]})
-            with open('dataHard.json', 'w') as f: json.dump({'getStatsHard':rows}, f)
-            print("rows", rows)
             return web.json_response(res)
         except:
             return web.json_response({"error":["getStatsHardJson"]})
-            print("rows errr!!!!")
             print(sys.exc_info())
 
 
@@ -494,12 +476,12 @@ class Server:
         #  background task 
     async def background_process_hardware(self):
         while True:
-            print("hw tik")
+            # print("hw tik")
             if 'manager' in self.app:
                 try:        
                     hard = self.app['manager'].getHardwareStatus()
                     cur_time = int(time.time())
-                    print("hard", hard)
+                    print("hard", time.strftime("%Y-%m-%d %H:%M"), hard)
                     async with aiosqlite.connect(self.db_path_hw) as db:
                         for item in hard:
                             sql = f'INSERT INTO hardware (device, cpu, mem, temp, streams, time) VALUES("{item}", {hard[item][0]}, {hard[item][1]}, {hard[item][2]}, {hard[item][3]}, {cur_time})'
@@ -528,6 +510,8 @@ class Server:
                                     # print("border", border, cams[cam_id][border])
                                     sql = f'INSERT INTO intersections (stream_id, border, u_in, u_out, time) VALUES("{cam_id}", "{border}", {cams[cam_id][border][0]}, {cams[cam_id][border][1]}, {cur_time})'
                                     # print("sql", sql)
+                                    print("stat", time.strftime("%Y-%m-%d %H:%M"), cams[cam_id][border])
+
                                     await db.execute(sql)
                                     await db.commit()                    
                                     # print("save data ok")
@@ -562,14 +546,52 @@ class Server:
         app['dispatch_hardware'] = asyncio.create_task(self.background_process_hardware())
         print("bg is OK")
 
+    async def on_shutdown(self, app):
+        print("start on_shutdown")
+        if  'websocketscmd' in app:
+            wss = list(self.app['websocketscmd'])
+            for ws in wss:
+                try:
+                    await ws.close(code=1001, message='Server shutdown')
+                finally:
+                    self.app['websocketscmd'].discard(ws)
+
     async def cleanup_background_tasks(self, app):
         print("cleanup_background_tasks start")
+        if 'manager' in self.app:
+            try:
+                cams = self.app['manager'].getCamsStat()
+                # print("stats", cams)
+                if cams:
+                    # {'file_39': {'border1': [0, 0]}}
+                    cur_time = int(time.time())
+                    async with aiosqlite.connect(self.db_path) as db:
+                        for cam_id in cams:
+                            for border in cams[cam_id]:
+                                # print("border", border, cams[cam_id][border])
+                                sql = f'INSERT INTO intersections (stream_id, border, u_in, u_out, time) VALUES("{cam_id}", "{border}", {cams[cam_id][border][0]}, {cams[cam_id][border][1]}, {cur_time})'
+                                # print("sql", sql)
+                                await db.execute(sql)
+                                await db.commit()
+                                # print("save data ok")
+            except:
+                print("error save Stats")
+                print(sys.exc_info())
+        print("wiat a sec")
+        time.sleep(2)
+        if 'manager' in self.app:
+            self.app['manager'].kill()
+        self.log.info('The manager is stopped!')
         app['dispatch_ws'].cancel()
         await self.app['dispatch_ws']
         app['dispatch_stats'].cancel()
         await self.app['dispatch_stats']
         app['dispatch_hardware'].cancel()
         await self.app['dispatch_hardware']
+        #  Stop cameras manager Object
+        print("cleanup is ok")
+
+
 
 
 if __name__ == "__main__":

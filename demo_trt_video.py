@@ -81,113 +81,6 @@ def allocate_buffers2(engine, batch_size):
     #     else: outputs.append(HostDeviceMem(host_mem, device_mem))
     # return inputs, outputs, bindings, stream
 
-def post_processing(cls, conf_thresh, nms_thresh, output):
-
-    # anchors = [12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401]
-    # num_anchors = 9
-    # anchor_masks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-    # strides = [8, 16, 32]
-    # anchor_step = len(anchors) // num_anchors
-
-    # [batch, num, 1, 4]
-    box_array = output[0]
-    # [batch, num, num_classes]
-    confs = output[1]
-
-    t1 = time.time()
-
-    if type(box_array).__name__ != 'ndarray':
-        box_array = box_array.cpu().detach().numpy()
-        confs = confs.cpu().detach().numpy()
-
-    num_classes = confs.shape[2]
-
-    # [batch, num, 4]
-    box_array = box_array[:, :, 0]
-
-    # [batch, num, num_classes] --> [batch, num]
-    max_conf = np.max(confs, axis=2)
-    max_id = np.argmax(confs, axis=2)
-
-    t2 = time.time()
-
-    bboxes_batch = []
-    for i in range(box_array.shape[0]):
-       
-        argwhere = max_conf[i] > conf_thresh
-        l_max_id = max_id[i, argwhere]
-        #print("l_max_id",l_max_id)
-        bboxes = []
-        # nms for each class
-        j = cls
-        if cls in l_max_id:
-        #for j in range(num_classes):
-            l_box_array = box_array[i, argwhere, :]
-            l_max_conf = max_conf[i, argwhere]
-
-            cls_argwhere = l_max_id == j
-            ll_box_array = l_box_array[cls_argwhere, :]
-            ll_max_conf = l_max_conf[cls_argwhere]
-            ll_max_id = l_max_id[cls_argwhere]
-
-            keep = nms_cpu(ll_box_array, ll_max_conf, nms_thresh)
-            
-            if (keep.size > 0):
-                ll_box_array = ll_box_array[keep, :]
-                ll_max_conf = ll_max_conf[keep]
-                ll_max_id = ll_max_id[keep]
-
-                for k in range(ll_box_array.shape[0]):
-                    bboxes.append([ll_box_array[k, 0], ll_box_array[k, 1], ll_box_array[k, 2], ll_box_array[k, 3], ll_max_conf[k], ll_max_conf[k], ll_max_id[k]])
-        
-        bboxes_batch.append(bboxes)
-
-    #t3 = time.time()
-
-    #print('-----------------------------------')
-    #print('       max and argmax : %f' % (t2 - t1))
-    #print('                  nms : %f' % (t3 - t2))
-    #print('Post processing total : %f' % (t3 - t1))
-    #print('-----------------------------------')
-    
-    return bboxes_batch
-
-
-def nms_cpu(boxes, confs, nms_thresh=0.5, min_mode=False):
-    # print(boxes.shape)
-    x1 = boxes[:, 0]
-    y1 = boxes[:, 1]
-    x2 = boxes[:, 2]
-    y2 = boxes[:, 3]
-
-    areas = (x2 - x1) * (y2 - y1)
-    order = confs.argsort()[::-1]
-
-    keep = []
-    while order.size > 0:
-        idx_self = order[0]
-        idx_other = order[1:]
-
-        keep.append(idx_self)
-
-        xx1 = np.maximum(x1[idx_self], x1[idx_other])
-        yy1 = np.maximum(y1[idx_self], y1[idx_other])
-        xx2 = np.minimum(x2[idx_self], x2[idx_other])
-        yy2 = np.minimum(y2[idx_self], y2[idx_other])
-
-        w = np.maximum(0.0, xx2 - xx1)
-        h = np.maximum(0.0, yy2 - yy1)
-        inter = w * h
-
-        if min_mode:
-            over = inter / np.minimum(areas[order[0]], areas[order[1:]])
-        else:
-            over = inter / (areas[order[0]] + areas[order[1:]] - inter)
-
-        inds = np.where(over <= nms_thresh)[0]
-        order = order[inds + 1]
-    
-    return np.array(keep)
 
 
 def GiB(val):
@@ -232,6 +125,8 @@ def allocate_buffers(engine, batch_size):
 def do_inference(context, bindings, inputs, outputs, stream):
     # Transfer input data to the GPU.
     #cuda.memcpy_htod_async(d_input, h_input, stream)
+    print("inputs",inputs[0])
+    print("device",inputs[0].device)
     [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
     context.execute_async(bindings=bindings, stream_handle=stream.handle)
     #cuda.memcpy_dtoh_async(h_output, d_output, stream)
@@ -248,32 +143,58 @@ def get_engine(engine_path):
     with open(engine_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
         return runtime.deserialize_cuda_engine(f.read())
 
-TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-class GpuDevice(object):
+#TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+class GpuDevice(threading.Thread):
     def __init__(self):
-      #threading.Thread.__init__(self)
+      threading.Thread.__init__(self)
+      #self.condition = condition
       self.skip_counter = 0
       #TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
       #trt.init_libnvinfer_plugins(TRT_LOGGER, '')
       #self.trt_runtime = trt.Runtime(TRT_LOGGER)
-      self.TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
       self.counter = 0
-      self.cap = cv2.VideoCapture('39.avi')
+      self.cap = cv2.VideoCapture('video/39.avi')
       self.img_size = 416
       self.max_batch_size = 1
       self.image_size = (self.img_size, self.img_size)
-      self.engine_path = 'yolov4_-1_3_'+str(self.img_size)+'_'+str(self.img_size)+'_dynamic.engine' # TRT inference time: 0.021343
+      self.engine_path = 'models/yolov4_-1_3_'+str(self.img_size)+'_'+str(self.img_size)+'_dynamic.engine' # TRT inference time: 0.021343
       #self.trt_runtime = trt.Runtime(self.TRT_LOGGER)
       self.engine = None
-      with open(self.engine_path, "rb") as f, trt.Runtime(self.TRT_LOGGER) as runtime:
-        self.engine = runtime.deserialize_cuda_engine(f.read())
-            # Allocate buffers
-        #print('Allocating Buffers')
-      self.inputs, self.outputs, self.bindings, self.stream = allocate_buffers(self.engine, self.max_batch_size)
-      #print("1--",self.bindings,self.stream.handle)
-      with self.engine.create_execution_context() as context:
-        context.set_binding_shape(0, (self.max_batch_size, 3, self.img_size, self.img_size))
-        while True:
+      self.running = False
+      #self.start()
+
+    def run(self):
+      cuda.init()
+      dev = cuda.Device(0)
+      self.ctx = dev.make_context()
+      self.TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+      self.trt_runtime = trt.Runtime(self.TRT_LOGGER)
+      with open(self.engine_path, "rb") as f:
+        self.engine = self.trt_runtime.deserialize_cuda_engine(f.read())
+      self.context = self.engine.create_execution_context()
+      self.context.set_binding_shape(0, (self.max_batch_size, 3, self.img_size, self.img_size))
+      self.inputs = []
+      self.outputs = []
+      self.bindings = []
+      self.stream = cuda.Stream()
+      for binding in self.engine:
+            size = trt.volume(self.engine.get_binding_shape(binding)) * self.max_batch_size
+            dims = self.engine.get_binding_shape(binding)        
+            if dims[0] < 0: size *= -1        
+            dtype = trt.nptype(self.engine.get_binding_dtype(binding))
+            # Allocate host and device buffers
+            host_mem = cuda.pagelocked_empty(size, dtype)
+            device_mem = cuda.mem_alloc(host_mem.nbytes)
+            # Append the device buffer to device bindings.
+            self.bindings.append(int(device_mem))
+            # Append to the appropriate list.
+            if self.engine.binding_is_input(binding): 
+              self.inputs.append(HostDeviceMem(host_mem, device_mem))
+            else: 
+              self.outputs.append(HostDeviceMem(host_mem, device_mem))
+      if True:
+        self.running = True
+        while self.running:
           r, frame = self.cap.read()
           if (not r):
               print("skip frame ", self.skip_counter)
@@ -294,30 +215,102 @@ class GpuDevice(object):
           self.inputs[0].host = frames
           #print("inputs",len(self.inputs[0].host))
           #print("outputs",len(self.outputs))
-          trt_outputs = do_inference_new(context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream, batch_size=cur_batch_size)
+          trt_outputs = self.do_inference_new(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream, batch_size=cur_batch_size)
           trt_outputs[0] = trt_outputs[0].reshape(cur_batch_size, -1, 1, 4)
           trt_outputs[1] = trt_outputs[1].reshape(cur_batch_size, -1, 80)
           # Output inference time
           #print("TensorRT inference time: {} ms".format(int(round((time.time() - inference_start_time) * 1000))))
           boxes = post_processing(0, 0.4, 0.6, trt_outputs)
           print(self.counter, time.time()-start, "boxes",  len(boxes[0]))
-          if self.counter > 10:
+          if self.counter > 13:
             break
       self.cap.release()
+      del self.engine
+      self.ctx.pop()
+      del self.ctx
       print("Finished OK")
       # self.kill()
 
-def do_inference_new(context, bindings, inputs, outputs, stream, batch_size=1):
-    # Transfer input data to the GPU.
-    [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
-    # Run inference.
-    context.execute_async(batch_size=batch_size, bindings=bindings, stream_handle=stream.handle)
-    # Transfer predictions back from the GPU.
-    [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
-    # Synchronize the stream
-    stream.synchronize()
-    # Return only the host outputs.
-    return [out.host for out in outputs]
+    def do_inference_new(self, context, bindings, inputs, outputs, stream, batch_size=1):
+        # Transfer input data to the GPU.
+        # print("context",context)
+        # print("inputs",inputs[0])
+        # print("device",inputs[0].device)
+
+        [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
+        # Run inference.
+        context.execute_async(batch_size=batch_size, bindings=bindings, stream_handle=stream.handle)
+        # Transfer predictions back from the GPU.
+        [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
+        # Synchronize the stream
+        stream.synchronize()
+        # Return only the host outputs.
+        return [out.host for out in outputs]
+
+    def post_processing(self, cls, conf_thresh, nms_thresh, output):
+        box_array = output[0]
+        confs = output[1]
+        if type(box_array).__name__ != 'ndarray':
+            box_array = box_array.cpu().detach().numpy()
+            confs = confs.cpu().detach().numpy()
+        num_classes = confs.shape[2]
+        # [batch, num, 4]
+        box_array = box_array[:, :, 0]
+        # [batch, num, num_classes] --> [batch, num]
+        max_conf = np.max(confs, axis=2)
+        max_id = np.argmax(confs, axis=2)
+        bboxes_batch = []
+        for i in range(box_array.shape[0]):
+            argwhere = max_conf[i] > conf_thresh
+            l_max_id = max_id[i, argwhere]
+            bboxes = []
+            j = cls
+            if cls in l_max_id:
+                l_box_array = box_array[i, argwhere, :]
+                l_max_conf = max_conf[i, argwhere]
+                cls_argwhere = l_max_id == j
+                ll_box_array = l_box_array[cls_argwhere, :]
+                ll_max_conf = l_max_conf[cls_argwhere]
+                ll_max_id = l_max_id[cls_argwhere]
+                keep = self.nms_cpu(ll_box_array, ll_max_conf, nms_thresh)
+                if (keep.size > 0):
+                    ll_box_array = ll_box_array[keep, :]
+                    ll_max_conf = ll_max_conf[keep]
+                    ll_max_id = ll_max_id[keep]
+                    for k in range(ll_box_array.shape[0]):
+                        bboxes.append([ll_box_array[k, 0], ll_box_array[k, 1], ll_box_array[k, 2], ll_box_array[k, 3], ll_max_conf[k], ll_max_conf[k], ll_max_id[k]])
+            bboxes_batch.append(bboxes)
+        return bboxes_batch
+
+
+    def nms_cpu(self, boxes, confs, nms_thresh=0.5, min_mode=False):
+        # print(boxes.shape)
+        x1 = boxes[:, 0]
+        y1 = boxes[:, 1]
+        x2 = boxes[:, 2]
+        y2 = boxes[:, 3]
+        areas = (x2 - x1) * (y2 - y1)
+        order = confs.argsort()[::-1]
+        keep = []
+        while order.size > 0:
+            idx_self = order[0]
+            idx_other = order[1:]
+            keep.append(idx_self)
+            xx1 = np.maximum(x1[idx_self], x1[idx_other])
+            yy1 = np.maximum(y1[idx_self], y1[idx_other])
+            xx2 = np.minimum(x2[idx_self], x2[idx_other])
+            yy2 = np.minimum(y2[idx_self], y2[idx_other])
+            w = np.maximum(0.0, xx2 - xx1)
+            h = np.maximum(0.0, yy2 - yy1)
+            inter = w * h
+            if min_mode:
+                over = inter / np.minimum(areas[order[0]], areas[order[1:]])
+            else:
+                over = inter / (areas[order[0]] + areas[order[1:]] - inter)
+            inds = np.where(over <= nms_thresh)[0]
+            order = order[inds + 1]
+        return np.array(keep)
+
     
 def do_inference(context, bindings, inputs, outputs, stream):
     # Transfer input data to the GPU.
@@ -414,8 +407,8 @@ def main():
         break
   print("end")
 
-  if context:
-      context.pop()
+  # if context:
+  #     context.pop()
   del context
   if cap:
     cap.release()
@@ -609,8 +602,16 @@ def detect2(context, inputs, outputs, bindings, stream, images, size=1):
 
 #TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 #main()
+#condition = threading.Condition()
+#cuda.init()
+#some_array = np.ones((1,512), dtype=np.float32)
+#num = cuda.Device.count()
+#print("num", num)
 gpu = 0
 gpu = GpuDevice()
+print("start")
+gpu.start()
+
 time.sleep(10)
 print("stop by time")
 # if gpu:

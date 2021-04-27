@@ -7,8 +7,8 @@ borders:
   border1:
   - - 0
     - 104
-  - - 363
-    - 113
+  - - 312
+    - 104
 display_video_flag: true
 encoder_filename: mars-small128.pb
 img_size_start:
@@ -18,7 +18,7 @@ isFromFile: true
 max_cosine_distance: 0.2
 name: test00
 path_track: 20
-save_path: video/39_out
+save_path: videos/39_out.avi
 save_video_flag: true
 save_video_res:
 - 720

@@ -1,7 +1,7 @@
 # TODO
 # # add gpu load balanser
 import os, sys, traceback, time
-import queue, threading
+import threading
 import asyncio
 import logging
 import numpy as np
@@ -17,9 +17,9 @@ import gpuDevice
 #from wingu_server import ws_send_data
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-class Manager(threading.Thread):
+class Manager(object):
     def __init__(self, configFileName):
-        threading.Thread.__init__(self)
+        #threading.Thread.__init__(self)
         self.gpusActiveList = {}  # running devices
         self.gpusList = {} # available devices
         self.gpusConfigList = {} #  devices configs
@@ -79,7 +79,6 @@ class Manager(threading.Thread):
                                     self.startGpu(cfg, name)
                                     self.gpuInfo[name] = index
                                     print("gpu", name, index, self.gpuInfo)
-                                    time.sleep(1)
                 else:
                     name = "/CPU:0"
                     self.gpusList[name] = 0  # Init for CPU

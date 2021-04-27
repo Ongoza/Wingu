@@ -1,4 +1,8 @@
 import os, sys, traceback
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
+# XLA_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda" python ml_code.py
+# TF_FLAGS="--xla_gpu_cuda_data_dir=/usr/local/cuda" python ml_code.py
+
 import time
 import queue, threading
 import logging
@@ -8,20 +12,22 @@ import yaml
 import math
 import numpy as np
 import cv2
-import gpu_trt_tool as trt_det
+# import gpu_trt_tool as trt_det
 # import tensorflow as tf
 import tensorrt as trt
 import pycuda.driver as cuda
 import asyncio
 from requests_futures import sessions
-# os.environ["CUDA_VISIBLE_DEVICES"] = "-1" # disable GPU
+import deep_sort.generate_detections_onnx as gdet
 
 #from yolov3_tf2.models import YoloV3
 
 #from tf2_yolov4.anchors import YOLOV4_ANCHORS
 #from tf2_yolov4.model import YOLOv4
 
-import videoCapture
+from videoCapture_trt import *
+from detector_trt import YoloDetector 
+#import tensorflow as tf
 # from server import log
 # from wingu_server import ws_send_data, save_statistic
 
@@ -34,53 +40,21 @@ class GpuDevice(threading.Thread):
         self.batch_size = 2
         self.log = log
         self.cams = {}
+        self.config_mot = None
+        with open('config/mot.json') as config_file:
+            config_mot = json.load(config_file, cls=ConfigDecoder)
+            self.config_mot = config['mot']
+        self.detector = None
         self.server_URL = "http://localhost:8080/update?"
         self.session = sessions.FuturesSession(max_workers=2)
         self.proceedTime = 0
-        #physical_devices = tf.config.experimental.list_physical_devices('GPU')
-        #print("physical_devices", physical_devices)
         self.device = str(device_name)
         try:
             self.config = configFile 
-            print("GpuDevice start init model")
-
-            print("GpuDevice init GPU config", self.config)
             self.cnt = 0
             self.frame = []
             self.img_size = self.config['img_size']
-            self.batch_size = 4
-            self._LOG = trt.Logger()
-            #cuda.init()
-            #self.trt_device = cuda.Device(0)
-            self.engine = trt_det.get_engine(os.path.join('models', 'yolov4_-20_3_416_416_dynamic.engine'), self._LOG)
-            print("engine is OK")
-            #self.context = self.trt_device.make_context()
-            self.context = self.engine.create_execution_context()
-            self.context.set_binding_shape(0, (self.batch_size, 3, self.img_size, self.img_size))
-            #inputs = []
-            #outputs = []
-            #bindings = []
-            #self.stream = cuda.Stream()
-            #for binding in self.engine:
-            #    size = trt.volume(self.engine.get_binding_shape(binding)) * self.batch_size
-            #    dims = self.engine.get_binding_shape(binding)
-            #    # in case batch dimension is -1 (dynamic)
-            #    if dims[0] < 0: size *= -1
-            #    dtype = trt.nptype(self.engine.get_binding_dtype(binding))
-            #    # Allocate host and device buffers
-            #    host_mem = cuda.pagelocked_empty(size, dtype)
-            #    device_mem = cuda.mem_alloc(host_mem.nbytes)
-            #    print("device_mem",host_mem,device_mem)
-            #    # Append the device buffer to device bindings.
-            #    bindings.append(int(device_mem))
-            #    # Append to the appropriate list.
-            #    if self.engine.binding_is_input(binding):
-            #        inputs.append(trt_det.HostDeviceMem(host_mem, device_mem))
-            #    else:
-            #        outputs.append(trt_det.HostDeviceMem(host_mem, device_mem))
-            #self.buffers = (inputs, outputs, bindings, stream)
-            self.buffers = trt_det.allocate_buffers(self.engine, self.batch_size)
-            print("self.buffers", type(self.buffers))
+            self.max_batch_size = 4
             self._stopevent = threading.Event()
             self.ready = True
             # self.isRunning = False
@@ -93,11 +67,6 @@ class GpuDevice(threading.Thread):
             self.session.get(self.server_URL + "cmd=GpuStart&name="+str(id)+"&status=error&module=Gpu")
             print(sys.exc_info())
             self.kill()
-
-    #def run(self):
-    #    loop = asyncio.new_event_loop()
-    #    loop.run_until_complete(self._run())
-    #    loop.close()
 
     def getCamsList(self):
         # check if cam exists then update cams list and retur it
@@ -114,7 +83,7 @@ class GpuDevice(threading.Thread):
                     #    self.start()
                     #    time.sleep(3)
                     print("GpuDevice Try start videoCapture obj")
-                    cam = videoCapture.VideoCapture(camConfig, self.config, self.id, cam_id, self.log)
+                    cam = VideoCapture(camConfig, self.config, self.id, cam_id, self.log)
                     if cam is not None:
                         self.cams[cam_id] = cam
                         self.log.debug("GpuDevice "+str(self.device)+" Current num of cameras:" + str(len(self.cams)))
@@ -148,22 +117,28 @@ class GpuDevice(threading.Thread):
 
     def kill(self):
         try:
-            if self.context:
-                self.context.pop()
-            del self.context
             self.log.debug("start to stop GPU "+ str(self.id))
             self._stopevent.set()
+            if hasattr(self, 'engine'):                
+                del self.engine
+            if hasattr(self, 'ctx'):
+                self.ctx.pop()
+                del self.ctx
+                print("context popped!!!")
+            if hasattr(self, 'context'): del self.context
             for cam in list(self.cams):
                 print("try stop cam" + cam)
                 self.stopCam(cam)
                 # self.cams[cam].kill()
                 print("cams num:", len(self.cams))
-            time.sleep(4)
             self.log.info("GPU "+str(self.id)+" stopped")        
             self.killed = True
             self.session.get(self.server_URL + "cmd=GpuStop&name="+str(id)+"&status=OK")
         except:
             print("can not stop some cams")
+        finally:
+            if hasattr(self, 'ctx'):
+                self.ctx.pop()
 
     def removeCam(self, cam_id):
         print("GpuDevice removeCam", cam_id)
@@ -171,140 +146,79 @@ class GpuDevice(threading.Thread):
             del self.cams[cam_id]
 
     def run(self):
-        self.log.debug("GpuDevice starting "+str(self.id))
-        #with trt_det.get_engine(os.path.join('models', 'yolov4_-20_3_416_416_dynamic.engine'), self._LOG) as engine, engine.create_execution_context() as context:
+        # init cuda
+        cuda.init()
+        dev = cuda.Device(0)
+        self.ctx = dev.make_context()
+        self.TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+        self.frame_count = 0
+        self.detector = YoloDetector(self.size, self.config_mot['yolo_detector'], self.TRT_LOGGER)
 
+        self.log.debug("GpuDevice starting "+str(self.id))
         while not self._stopevent.isSet():
-                # print("GpuDevice tik")
-                start = time.time()
-                self.cnt += 1
-                frames = []
-                cams = []
-                for cam in list(self.cams):
-                    if self.cams[cam]._stopevent.isSet():
-                        # self.log.debug("GpuDevice cam stopped: " + cam)
-                        self.cams[cam].kill()
-                        del self.cams[cam]
-                        print("del camera ", cam)
-                        #delete cam from cams list
-                        pass
-                    else:
-                        data = self.cams[cam].read()
-                        if type(data) != bool:
-                            print("data in", data.shape)
-                            frames.append(data)
+            # print("GpuDevice tik")
+            start = time.time()
+            self.cnt += 1
+            frames = []
+            features = []
+            cams = []
+            for cam in list(self.cams):
+                if self.cams[cam]._stopevent.isSet():
+                    self.cams[cam].kill()
+                    del self.cams[cam]
+                    print("del camera ", cam)
+                    #delete cam from cams list
+                    pass
+                else:
+                    try:
+                        frame = self.cams[cam].read()
+                        if frame is not None:
+                            frames.append(frame)
                             cams.append(self.cams[cam])
                         else:
                             print("skip data for cam:", cam)
-                        #print("cur_frame", cam.id, cam.cur_frame)
-                        #if (tr): cv2.imwrite("video/39_2.jpg", frames[0])
-                # start2 = time.time()
-                # print("read time=",len(frames), start2 - start)
-                if frames:
-                    start3 = time.time()
-                    batch_size = len(frames)
-                    frames_tf = np.stack(frames, axis=0)
-                    #print("-Shape of the network input: ", frames_tf.shape)
-                    #print("start detect")
-                    frames_tf = np.ascontiguousarray(frames_tf)
-                    print("Shape of the network input: ", frames_tf.shape, batch_size)
-                    boxes = trt_det.detect(self.context, self.buffers, frames_tf, batch_size, self.img_size)
-                    # print("detect", len(boxes[0]))
-                    try:
-                        # frame = frames[0]
-                        # print("frame rs = ", frames.shape)
-                        # convert numpy opencv to tensor
-                        #frames_tf = tf.convert_to_tensor(frames, dtype=tf.float32, dtype_hint=None, name=None)
-                        #print("to GPU=", time.time() - start3)
-                        # start4 = time.time()
-                        #boxes = self.detector.predict(frames_tf)
-                        for j in range(len(cams)):
-                           cams[j].track(boxes[j])
-                        self.proceedTime = time.time() - start
-                        print("detect time =", self.proceedTime, time.time() - start3)
                     except:
-                        self.log.error("GpuDevice "+str(self.id)+" skip frame by exception")
-                        print(sys.exc_info(), type(frames_tf))
-                else:
-                    time.sleep(1)
-                # self.log.info("GpuDevice Any available streams in GPU "+str(self.id))
-                # self.kill()
-                print("TRT cams({}) proceed time ={}".format(len(cams), time.time() - start))
+                        print("error frame!!!!!!!!!!!!!!!!!!!!!")
+                        print("frame", type(frame), frame.shape, frame)
+                        print(sys.exc_info())
+            #start2 = time.time()
+            #print("read time=",len(frames), start2 - start)
+            bbxs = 0
+            if frames:
+                self.detector.detect_async(frames)
+                boxes = self.detector.postprocess()
+                try:
+                    start2 = time.time()
+                    print("detect", time.time()- start2, len(trt_outputs[0]))
+                    print("boxes", len(boxes), time.time()- start2)
+                    for j in range(len(cams)):
+                        cams[j].track(boxes[j], frames[j], features)
+                except:
+                    self.log.error("GpuDevice "+str(self.id)+" skip frame by exception")
+                    print(sys.exc_info(), type(frames_tf))
+            else:
+                time.sleep(1)
+                print("Any active streams")
+            # self.log.info("GpuDevice Any available streams in GPU "+str(self.id))
+            # self.kill()
+            #print("TRT frame{} cams({}) ims,size({}) bbxs({}) FPS={}".format(self.cnt, len(cams), self.img_size, bbxs, int(1/(time.time() - start))))
+        #self.kill()
 
 
-# if __name__ == "__main__":
-    # tf.debugging.set_log_device_placement(True)
-    # log = logging.getLogger('app')
-    # log.setLevel(logging.DEBUG)
-    # f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
-    # ch = logging.StreamHandler()
-    # ch.setLevel(logging.DEBUG)
-    # ch.setFormatter(f)
-    # log.addHandler(ch)
-    # devices = ["CPU"]
-    # print(tf.config.experimental.list_physical_devices())
-    # # my_devices = tf.config.experimental.list_physical_devices(device_type='CPU')
-    # # tf.config.experimental.set_visible_devices(devices= my_devices, device_type='CPU')
-    # for gpu in tf.config.experimental.list_physical_devices('GPU'):
-    #     print("cuda is available " + str(len(gpus)))
-    #     devices.append(gpu.name)
-    #     device_name = gpus[0].name
-    # else:
-    #     print("cuda is not available")
-    #     # device = tf.config.experimental.list_physical_devices('CPU')[0].name
-    # print("devices: " + " ".join(devices))
-    # print("device=", devices[0])
-    # device_id = 0
-    # device_name = devices[0]
-    # tr = False
-    # gpu = None
-    # try:
-    #     with open('config/Stream_file_39.yaml', encoding='utf-8') as f:
-    #         configStream = yaml.load(f, Loader=yaml.FullLoader)
-    #     with open(os.path.join('config', 'Gpu_device0.yaml'), encoding='utf-8') as f:
-    #         configGpu = yaml.load(f, Loader=yaml.FullLoader)
-    #     gpu = GpuDevice(device_id, device_name, configGpu, log)
-    #     time.sleep(5)
-    #     gpu.startCam(configStream, "file_39", 0)
-    #     #time.sleep(5)
-    #     #gpu.startCam('Stream_43', 0)
-    #     tr = True
-    # except:
-    #     print("ecxept!!!!!")
-    #     print(sys.exc_info())
-    #     if gpu:
-    #         print("try stop gpu from main")
-    #         gpu.kill()
-    # if True:
-    #     print("cams "+ str(len(gpu.cams)))
-    #     while True:
-    #         try:
-    #             start = time.time()
-    #             for i, cam in enumerate(gpu.cams):
-    #                 # print("frame "+ gpu.cams[0].id +" ", gpu.cams[0].get_cur_frame())
-    #                 # print("frame "+ cam.id +" ", cam.cur_frame_cnt)
-    #                 if gpu.cams[cam].outFrame.any():
-    #                     cv2.imshow(str(cam), gpu.cams[cam].get_cur_frame())
-    #                 if gpu.cams[cam].proceedTime[0]:
-    #                     print("fpsRead_"+str(i), 1.0/(gpu.cams[cam].proceedTime[0]))
-    #                 if gpu.cams[cam].proceedTime[1]:
-    #                     print("fpsTrack_"+str(i), 1.0/(gpu.cams[cam].proceedTime[1]))
-    #             key = cv2.waitKey(1)
-    #             if key & 0xFF == ord('q'): break
-    #         except:
-    #             print("stop by exception")
-    #             print(sys.exc_info())
-    #             break
-    # else:
-    #     try:
-    #         time.sleep(60)
-    #     except:
-    #         print(sys.exc_info())
-    #         gpu.kill()
-    # print("gpu ", gpu)
-    # if gpu:
-    #     print("try stop gpu from main")
-    #     gpu.kill()
-    # cv2.destroyAllWindows()
-    # print("Stoped - OK")
-    #
+if __name__ == "__main__":
+    log = logging.getLogger('app')
+    log.setLevel(logging.DEBUG)
+    f = logging.Formatter('[L:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', datefmt = '%d-%m-%Y %H:%M:%S')
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    ch.setFormatter(f)
+    log.addHandler(ch)
+    device_id = 0    
+    device_name = "GPU:0"
+    with open('config/Stream_file_39.yaml', encoding='utf-8') as f:    
+        configStream = yaml.load(f, Loader=yaml.FullLoader)  
+    with open(os.path.join('config', 'Gpu_device0.yaml'), encoding='utf-8') as f:    
+        configGpu = yaml.load(f, Loader=yaml.FullLoader)        
+    gpu = GpuDevice(device_id, device_name, configGpu, log)
+    gpu.startCam(configStream, "file_39", 0)
+
