@@ -42,7 +42,13 @@ class YoloDetector():
       img_in = np.ascontiguousarray(img_in)
       t1 = time.perf_counter()
       self.inputs[0].host = img_in
-      self.do_inference(self.context, bindings=self.bindings, inputs=self.inputs, outputs=self.outputs, stream=self.stream)
+      [cuda.memcpy_htod_async(inp.device, inp.host, self.stream) for inp in self.inputs]
+      self.context.execute_async(bindings=self.bindings, stream_handle=self.stream.handle)
+      [cuda.memcpy_dtoh_async(out.host, out.device, self.stream) for out in self.outputs]
+      self.stream.synchronize()
+      trt_outputs = [out.host for out in self.outputs]     
+      boxes = self.post_processing(0.4, 0.6, trt_outputs, self.img_size, self.batch_size, 0)
+      return boxes
 
   # Allocates all buffers required for an engine, i.e. host/device inputs/outputs.
   def allocate_buffers(self, engine, batch_size):
@@ -63,17 +69,6 @@ class YoloDetector():
           else:
               outputs.append(HostDeviceMem(host_mem, device_mem))
       return inputs, outputs, bindings, stream
-
-  def do_inference(self, context, bindings, inputs, outputs, stream):
-      [cuda.memcpy_htod_async(inp.device, inp.host, stream) for inp in inputs]
-      context.execute_async(bindings=bindings, stream_handle=stream.handle)
-      [cuda.memcpy_dtoh_async(out.host, out.device, stream) for out in outputs]
-
-  def postprocess(self):
-      self.stream.synchronize()
-      trt_outputs = [out.host for out in self.outputs]     
-      boxes = self.post_processing(0.4, 0.6, trt_outputs, self.img_size, self.batch_size, 0)
-      return boxes
 
   # @nb.njit(fastmath=True, cache=True)
   def post_processing(self, conf_thresh, nms_thresh, output, scale, batch_size, cls):
@@ -159,10 +154,8 @@ if __name__ == '__main__':
       print("start detect")
       for i in range(10):
         t1 = time.perf_counter()
-        detector.detect(frames)
-        t2 = time.perf_counter()
-        boxes = detector.postprocess()
-        print(i, 'detected', len(boxes), time.perf_counter()-t1, t2-t1, time.perf_counter()-t2)
+        boxes = detector.detect(frames)
+        print(i, 'detected', len(boxes), time.perf_counter()-t1)
       for i in range(len(boxes)):
         for box in boxes[i]:
           tlbr = box.astype(int)
