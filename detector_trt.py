@@ -141,7 +141,7 @@ if __name__ == '__main__':
     image_src_1 = cv2.imread(image_path_1)
     image_src_1 = cv2.cvtColor(image_src_1, cv2.COLOR_BGR2RGB)
     image_src_1 = cv2.resize(image_src_1, image_size, interpolation=cv2.INTER_LINEAR)
-    frames = [image_src_1, image_src_0, image_src_1]
+    frames = [image_src_1, image_src_0]
     cuda.init()
     dev = cuda.Device(0)
     ctx = dev.make_context()
